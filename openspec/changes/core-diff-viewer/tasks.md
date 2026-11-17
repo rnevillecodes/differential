@@ -23,13 +23,13 @@
 
 ## 4. Change listing and per-file diffs (repo-diff)
 
-- [ ] 4.1 Implement `list_changes`: one `git diff -z -M --raw --numstat <sha>` call parsed into `FileSummary` (status, old/new paths, stats, binary), plus totals; verify integration tests for modified, added, deleted, renamed, binary, and staged+unstaged combined against the working tree
-- [ ] 4.2 Add untracked files via `git ls-files -z --others --exclude-standard`, computing line counts and binary-ness in Rust (NUL in first 8 KB); verify integration tests: new file listed as `untracked` with full line count, ignored file absent
-- [ ] 4.3 Apply the large-file guard (changes > 10,000 lines or side > 2 MB → `isLarge`, constants in one module); verify an integration test with a generated large file
-- [ ] 4.4 Implement `file_diff` for tracked files (`git diff -M <sha> -- <old> <new>` → parser → intraline) and synthesized all-added diffs for untracked files; refuse large files unless `force`; verify integration tests for each file status and the force flag
-- [ ] 4.5 Implement `file_content(path, side)` (base via `git show <sha>:<path>`, worktree from disk, CRLF normalized); verify integration tests for both sides and a deleted/added file's missing side
-- [ ] 4.6 Add the read-only guarantee test: after `list_changes` + `file_diff` + `file_content` on a repo with staged, unstaged, and untracked files, `git status --porcelain=v2` output and `.git/index` mtime are unchanged; verify it passes
-- [ ] 4.7 Register all commands (`open_repo`, `list_changes`, `file_diff`, `file_content`, `initial_args`) with Tauri and parse `mydiff [path] [--base <rev>]` from argv; verify `initial_args` unit test and that commands are callable from the devtools console
+- [x] 4.1 Implement `list_changes`: one `git diff -z -M --raw --numstat <sha>` call parsed into `FileSummary` (status, old/new paths, stats, binary), plus totals; verify integration tests for modified, added, deleted, renamed, binary, and staged+unstaged combined against the working tree
+- [x] 4.2 Add untracked files via `git ls-files -z --others --exclude-standard`, computing line counts and binary-ness in Rust (NUL in first 8 KB); verify integration tests: new file listed as `untracked` with full line count, ignored file absent
+- [x] 4.3 Apply the large-file guard (changes > 10,000 lines or side > 2 MB → `isLarge`, constants in one module); verify an integration test with a generated large file
+- [x] 4.4 Implement `file_diff` for tracked files (`git diff -M <sha> -- <old> <new>` → parser → intraline) and synthesized all-added diffs for untracked files; refuse large files unless `force`; verify integration tests for each file status and the force flag
+- [x] 4.5 Implement `file_content(path, side)` (base via `git show <sha>:<path>`, worktree from disk, CRLF normalized); verify integration tests for both sides and a deleted/added file's missing side
+- [x] 4.6 Add the read-only guarantee test: after `list_changes` + `file_diff` + `file_content` on a repo with staged, unstaged, and untracked files, `git status --porcelain=v2` output and `.git/index` mtime are unchanged; verify it passes
+- [x] 4.7 Register all commands (`open_repo`, `list_changes`, `file_diff`, `file_content`, `initial_args`) with Tauri and parse `mydiff [path] [--base <rev>]` from argv; verify `initial_args` unit test and that commands are callable from the devtools console
 
 ## 5. App shell, repository and base selection (diff-viewer)
 
