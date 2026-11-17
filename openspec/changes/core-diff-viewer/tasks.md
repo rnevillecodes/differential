@@ -2,8 +2,8 @@
 
 ## 1. Project scaffold
 
-- [ ] 1.1 Scaffold a Tauri v2 + React + TypeScript + Vite app in the repo root (`src/`, `src-tauri/`), named `mydiff`; verify `npm run tauri dev` opens an empty window on Windows
-- [ ] 1.2 Add `.gitattributes` (`* text=auto eol=lf`, binary patterns) and `.gitignore` for `node_modules/`, `target/`, `dist/`; verify `git status` shows no build output after a dev build
+- [x] 1.1 Scaffold a Tauri v2 + React + TypeScript + Vite app in the repo root (`src/`, `src-tauri/`), named `mydiff`; verify `npm run tauri dev` opens an empty window on Windows
+- [x] 1.2 Add `.gitattributes` (`* text=auto eol=lf`, binary patterns) and `.gitignore` for `node_modules/`, `target/`, `dist/`; verify `git status` shows no build output after a dev build
 - [ ] 1.3 Add backend dependencies (`serde`, `serde_json`, `thiserror`, `similar`, `ts-rs`, `tauri-plugin-dialog`; dev: `tempfile`) and frontend dependencies (`@tanstack/react-virtual`, `shiki`, `zustand`; dev: `vitest`); verify `cargo build` and `npm run build` succeed
 - [ ] 1.4 Restrict Tauri capabilities to the dialog plugin and app commands only; verify `src-tauri/capabilities/` grants no fs/shell permissions
 - [ ] 1.5 Create the module layout from design §1 (`src-tauri/src/{git,diff}`, `src/{model,api,rows,highlight,components}`) and add `npm test` / `cargo test` scripts; verify both commands run (with zero tests)
