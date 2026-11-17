@@ -15,7 +15,7 @@ The application SHALL let the user choose the repository to review, either from 
 
 #### Scenario: Launch without arguments
 - **WHEN** the application is launched with no arguments
-- **THEN** it prompts the user to pick a repository folder
+- **THEN** it shows a screen inviting the user to open a repository, with an action that opens the folder picker; the folder picker does not open by itself
 
 #### Scenario: Open a different repository
 - **WHEN** a repository is already open and the user picks another folder

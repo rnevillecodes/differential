@@ -15,6 +15,7 @@ import {
   type Row,
   type ViewMode,
 } from "../rows/build";
+import { TokenSpans } from "./TokenSpans";
 
 export const ROW_HEIGHT = 20;
 
@@ -177,19 +178,7 @@ function CodeSegments({ line, tokens }: { line: DisplayLine; tokens: Tokens }) {
           ? tokens.old?.[line.oldNo - 1]
           : undefined;
   const wordClass = line.kind === "added" ? "ix added-word" : "ix removed-word";
-  return (
-    <>
-      {segments(line.text, lineTokens, line.intraline).map((s, i) => {
-        const cls = [s.light ? "tok" : "", s.changed ? wordClass : ""].filter(Boolean).join(" ");
-        if (!cls) return <span key={i}>{s.text}</span>;
-        return (
-          <span key={i} className={cls} style={s.light ? ({ "--l": s.light, "--d": s.dark } as React.CSSProperties) : undefined}>
-            {s.text}
-          </span>
-        );
-      })}
-    </>
-  );
+  return <TokenSpans segments={segments(line.text, lineTokens, line.intraline)} changedClass={wordClass} />;
 }
 
 function GapView({

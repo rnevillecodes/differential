@@ -14,13 +14,21 @@ describe("app store", () => {
     expect(store.getState().files[0].status).toBe("ready");
   });
 
-  it("prompts for a folder at init without a path", async () => {
+  it("does not open the folder picker at init without a path", async () => {
     const api = fakeApi();
     const store = createAppStore(api, memoryStorage());
     await store.getState().init();
-    expect(api.pickFolder).toHaveBeenCalled();
+    expect(api.pickFolder).not.toHaveBeenCalled();
     expect(api.openRepo).not.toHaveBeenCalled();
     expect(store.getState().repo).toBeNull();
+  });
+
+  it("initializes only once when init is called twice (StrictMode)", async () => {
+    const api = fakeApi({ initialArgs: vi.fn(async () => ({ path: "C:/repo", base: null })) });
+    const store = createAppStore(api, memoryStorage());
+    await Promise.all([store.getState().init(), store.getState().init()]);
+    expect(api.initialArgs).toHaveBeenCalledTimes(1);
+    expect(api.openRepo).toHaveBeenCalledTimes(1);
   });
 
   it("reports a blocking error when the folder is not a repository", async () => {
@@ -136,5 +144,154 @@ describe("app store", () => {
     resolveSlow(changeSet([summary(0, "slow.ts")], { baseRef: "slow" }));
     await slow;
     expect(store.getState().base).toBe("fast");
+  });
+});
+
+describe("project explorer state", () => {
+  const exclusive = (s: { selectedId: number | null; viewed: unknown }) =>
+    expect(s.selectedId !== null && s.viewed !== null).toBe(false);
+
+  it("persists the sidebar tab and switching tabs keeps the main pane", async () => {
+    const storage = memoryStorage();
+    const store = createAppStore(fakeApi(), storage);
+    expect(store.getState().sidebarTab).toBe("changes");
+    await store.getState().openPath("C:/repo");
+    store.getState().select(1);
+    store.getState().setSidebarTab("files");
+    expect(storage.data["differential.sidebarTab"]).toBe("files");
+    expect(store.getState().selectedId).toBe(1);
+    expect(store.getState().viewed).toBeNull();
+    expect(createAppStore(fakeApi(), storage).getState().sidebarTab).toBe("files");
+  });
+
+  it("loads the project listing lazily, then again on refresh", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    expect(api.listFiles).not.toHaveBeenCalled();
+    store.getState().setSidebarTab("files");
+    await flush();
+    expect(api.listFiles).toHaveBeenCalledWith("C:/repo");
+    expect(store.getState().projectFiles).toEqual(["a.ts", "b.ts", "README.md"]);
+    store.getState().setSidebarTab("changes");
+    await store.getState().refresh();
+    expect(api.listFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads the listing with the change set when opening on the Files tab", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage({ "differential.sidebarTab": "files" }));
+    await store.getState().openPath("C:/repo");
+    expect(store.getState().projectFiles).toEqual(["a.ts", "b.ts", "README.md"]);
+  });
+
+  it("reports a listing failure without blocking the diff", async () => {
+    const api = fakeApi({ listFiles: vi.fn(async () => Promise.reject({ kind: "git", message: "boom" })) });
+    const store = createAppStore(api, memoryStorage({ "differential.sidebarTab": "files" }));
+    await store.getState().openPath("C:/repo");
+    expect(store.getState().filesError?.message).toBe("boom");
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().changes).not.toBeNull();
+  });
+
+  it("drops a stale listing from a superseded load", async () => {
+    let resolveSlow!: (v: string[]) => void;
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage({ "differential.sidebarTab": "files" }));
+    await store.getState().openPath("C:/repo");
+    vi.mocked(api.listFiles)
+      .mockImplementationOnce(() => new Promise((r) => (resolveSlow = r)))
+      .mockResolvedValueOnce(["fresh.ts"]);
+    const slow = store.getState().refresh();
+    await store.getState().refresh();
+    resolveSlow(["stale.ts"]);
+    await slow;
+    expect(store.getState().projectFiles).toEqual(["fresh.ts"]);
+  });
+
+  it("prunes vanished folders on refresh and resets them for a new repository", async () => {
+    const api = fakeApi({ listFiles: vi.fn(async () => ["src/ui/a.ts", "docs/x.md"]) });
+    const store = createAppStore(api, memoryStorage({ "differential.sidebarTab": "files" }));
+    await store.getState().openPath("C:/repo");
+    store.getState().reveal("src/ui/a.ts");
+    store.getState().toggleFolder("docs");
+    expect([...store.getState().expanded].sort()).toEqual(["docs", "src", "src/ui"]);
+    vi.mocked(api.listFiles).mockResolvedValueOnce(["src/ui/a.ts"]);
+    await store.getState().refresh();
+    expect([...store.getState().expanded].sort()).toEqual(["src", "src/ui"]);
+    await store.getState().openPath("C:/other");
+    expect(store.getState().expanded.size).toBe(0);
+  });
+
+  it("opens a changed path as a diff and an unchanged path as contents", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md");
+    exclusive(store.getState());
+    expect(store.getState().selectedId).toBeNull();
+    expect(store.getState().viewed?.load.status).toBe("loading");
+    await flush();
+    expect(api.viewFile).toHaveBeenCalledWith("C:/repo", "README.md", false);
+    expect(store.getState().viewed).toEqual({ path: "README.md", load: { status: "ready", content: "x\n" } });
+    store.getState().openTreePath("b.ts");
+    exclusive(store.getState());
+    expect(store.getState().selectedId).toBe(1);
+    expect(store.getState().viewed).toBeNull();
+  });
+
+  it("next-file from a viewed file selects the first changed file", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md");
+    store.getState().selectNext();
+    exclusive(store.getState());
+    expect(store.getState().selectedId).toBe(0);
+    expect(store.getState().viewed).toBeNull();
+  });
+
+  it("loads a large viewed file on request", async () => {
+    const api = fakeApi({
+      viewFile: vi.fn(async (_r: string, _p: string, force: boolean) =>
+        force ? { kind: "text" as const, content: "big\n" } : { kind: "large" as const, size: 3_000_000 },
+      ),
+    });
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("big.log");
+    await flush();
+    expect(store.getState().viewed?.load).toEqual({ status: "large", size: 3_000_000 });
+    store.getState().loadViewedAnyway();
+    await flush();
+    expect(api.viewFile).toHaveBeenLastCalledWith("C:/repo", "big.log", true);
+    expect(store.getState().viewed?.load).toEqual({ status: "ready", content: "big\n" });
+  });
+
+  it("refresh keeps a viewed file, re-reads it, and clears it once gone", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage({ "differential.sidebarTab": "files" }));
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md");
+    await flush();
+    await store.getState().refresh();
+    await flush();
+    exclusive(store.getState());
+    expect(store.getState().viewed?.path).toBe("README.md");
+    expect(api.viewFile).toHaveBeenCalledTimes(2);
+    vi.mocked(api.listFiles).mockResolvedValueOnce(["a.ts", "b.ts"]);
+    await store.getState().refresh();
+    expect(store.getState().viewed).toBeNull();
+  });
+
+  it("refresh switches a viewed file to its diff once it has changes", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md");
+    vi.mocked(api.listChanges).mockResolvedValueOnce(changeSet([summary(0, "a.ts"), summary(1, "README.md")]));
+    await store.getState().refresh();
+    exclusive(store.getState());
+    expect(store.getState().selectedId).toBe(1);
+    expect(store.getState().viewed).toBeNull();
   });
 });

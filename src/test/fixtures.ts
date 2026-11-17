@@ -75,6 +75,8 @@ export function fakeApi(over: Partial<Api> = {}): Api {
     listChanges: vi.fn(async () => changeSet([summary(0, "a.ts"), summary(1, "b.ts")])),
     fileDiff: vi.fn(async () => fileDiff([])),
     fileContent: vi.fn(async () => "x\n"),
+    listFiles: vi.fn(async () => ["a.ts", "b.ts", "README.md"]),
+    viewFile: vi.fn(async () => ({ kind: "text" as const, content: "x\n" })),
     pickFolder: vi.fn(async () => null),
     ...over,
   };

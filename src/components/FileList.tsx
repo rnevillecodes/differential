@@ -1,18 +1,10 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useRef } from "react";
-import type { FileStatus } from "../model/FileStatus";
 import type { FileSummary } from "../model/FileSummary";
 import { displayPath, useApp } from "../store";
+import { StatusBadge } from "./status";
 
 const ROW_HEIGHT = 28;
-
-const STATUS_LETTER: Record<FileStatus, string> = {
-  added: "A",
-  modified: "M",
-  deleted: "D",
-  renamed: "R",
-  untracked: "U",
-};
 
 function splitPath(path: string): [dir: string, name: string] {
   const i = path.lastIndexOf("/");
@@ -94,9 +86,7 @@ const FileRow = memo(function FileRow({
       title={title}
       data-testid="file-row"
     >
-      <span className={`status status-${file.status}`} aria-label={file.status}>
-        {STATUS_LETTER[file.status]}
-      </span>
+      <StatusBadge status={file.status} />
       <span className="file-path">
         <bdi>
           {renamedFrom && <span className="dir">{renamedFrom} → </span>}

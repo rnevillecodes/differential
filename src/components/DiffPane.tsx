@@ -1,5 +1,6 @@
-import { displayPath, useApp } from "../store";
+import { displayPath, useApp, type ViewedFile } from "../store";
 import { DiffView } from "./DiffView";
+import { FileView } from "./FileView";
 
 const ERROR_TITLES: Record<string, string> = {
   gitNotFound: "Git not found",
@@ -18,6 +19,8 @@ export function DiffPane() {
   const loading = useApp((s) => s.loading);
   const pickAndOpen = useApp((s) => s.pickAndOpen);
   const loadLarge = useApp((s) => s.loadLarge);
+  const viewed = useApp((s) => s.viewed);
+  const loadViewedAnyway = useApp((s) => s.loadViewedAnyway);
 
   if (error) {
     return (
@@ -52,6 +55,8 @@ export function DiffPane() {
       </section>
     );
   }
+
+  if (viewed) return <ViewedPane viewed={viewed} onLoadAnyway={loadViewedAnyway} />;
 
   if (changes.files.length === 0) {
     return (
@@ -136,6 +141,73 @@ export function DiffPane() {
             <span>→</span>
           </>
         )}
+        <span>{path}</span>
+      </div>
+      {body}
+    </section>
+  );
+}
+
+const formatSize = (bytes: number) =>
+  bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+
+/** An unchanged file opened from the project tree. */
+function ViewedPane({ viewed, onLoadAnyway }: { viewed: ViewedFile; onLoadAnyway: () => void }) {
+  const { path, load } = viewed;
+  let body: React.ReactNode;
+  switch (load.status) {
+    case "loading":
+      body = <div className="message">Loading…</div>;
+      break;
+    case "ready":
+      body = <FileView key={path} path={path} content={load.content} />;
+      break;
+    case "binary":
+      body = (
+        <div className="message" data-testid="binary-placeholder">
+          <h2>Binary file</h2>
+          <p>This file is binary; its contents are not shown.</p>
+        </div>
+      );
+      break;
+    case "large":
+      body = (
+        <div className="message" data-testid="large-placeholder">
+          <h2>Large file</h2>
+          <p>This file is large ({formatSize(load.size)}) and is not shown by default.</p>
+          <button onClick={onLoadAnyway}>Load file anyway</button>
+        </div>
+      );
+      break;
+    case "missing":
+      body = (
+        <div className="message" data-testid="missing-placeholder">
+          <h2>File not found</h2>
+          <p>This file no longer exists on disk. Refresh (Ctrl+R) to update the file list.</p>
+        </div>
+      );
+      break;
+    case "notAFile":
+      body = (
+        <div className="message">
+          <h2>Not a file</h2>
+          <p>This entry is a folder or submodule; its contents are not shown.</p>
+        </div>
+      );
+      break;
+    case "error":
+      body = (
+        <div className="message error" role="alert">
+          <h2>Could not load this file</h2>
+          <p>{load.error.message}</p>
+        </div>
+      );
+      break;
+  }
+  return (
+    <section className="diff-pane" aria-label={`Contents of ${path}`}>
+      <div className="diff-header">
+        <span className="status-unchanged">unchanged</span>
         <span>{path}</span>
       </div>
       {body}

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import type { StoreApi } from "zustand";
 import { tauriApi } from "./api";
 import { DiffPane } from "./components/DiffPane";
-import { FileList } from "./components/FileList";
+import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { createAppStore, StoreContext, type AppState } from "./store";
 
@@ -45,7 +45,7 @@ export default function App({ store: injected }: { store?: StoreApi<AppState> })
       <div className="app">
         <Toolbar />
         <main className="main">
-          <FileList />
+          <Sidebar />
           <DiffPane />
         </main>
       </div>
