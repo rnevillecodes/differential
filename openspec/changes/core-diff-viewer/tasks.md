@@ -17,9 +17,9 @@
 
 ## 3. Diff model and parser (repo-diff)
 
-- [ ] 3.1 Define the diff model types (design §5) with serde + `ts-rs`, generating TS into `src/model/`; verify `cargo test` regenerates identical, checked-in TS files
-- [ ] 3.2 Implement the unified-diff parser (headers, hunk headers with section text, `+`/`-`/context lines with old/new numbers, `\ No newline at end of file`, `Binary files ... differ`); verify fixture tests for: simple modify, multiple hunks, add, delete, rename with edits, no-EOF-newline on each side, binary, CRLF content, unicode paths, whitespace-only lines preserved
-- [ ] 3.3 Implement intraline ranges with `similar` (pair removed/added lines by position within each change block, word granularity, UTF-16 offsets, skip lines > 1,000 chars or < ~40% similar); verify unit tests including `const timeout = 30;` → `60;` highlighting only the number
+- [x] 3.1 Define the diff model types (design §5) with serde + `ts-rs`, generating TS into `src/model/`; verify `cargo test` regenerates identical, checked-in TS files
+- [x] 3.2 Implement the unified-diff parser (headers, hunk headers with section text, `+`/`-`/context lines with old/new numbers, `\ No newline at end of file`, `Binary files ... differ`); verify fixture tests for: simple modify, multiple hunks, add, delete, rename with edits, no-EOF-newline on each side, binary, CRLF content, unicode paths, whitespace-only lines preserved
+- [x] 3.3 Implement intraline ranges with `similar` (pair removed/added lines by position within each change block, word granularity, UTF-16 offsets, skip lines > 1,000 chars or < ~40% similar); verify unit tests including `const timeout = 30;` → `60;` highlighting only the number
 
 ## 4. Change listing and per-file diffs (repo-diff)
 
