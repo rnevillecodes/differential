@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod diff;
+pub mod error;
 pub mod git;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

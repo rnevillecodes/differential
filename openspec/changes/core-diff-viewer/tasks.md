@@ -10,10 +10,10 @@
 
 ## 2. Git runner and repository resolution (repo-diff)
 
-- [ ] 2.1 Implement the git process runner (flags `--no-pager`, `-c core.quotepath=false`, `GIT_OPTIONAL_LOCKS=0`, `CREATE_NO_WINDOW` on Windows, async, captured stdout/stderr) and the typed error enum (`NotARepo`, `GitNotFound`, `BadRevision`, `Io`, `Git{stderr}`); verify unit tests for error mapping, including a missing-executable case
-- [ ] 2.2 Implement `open_repo` (`rev-parse --show-toplevel`, git version check ≥ 2.30); verify integration tests: repo root, subfolder resolves to top level, non-repo folder → `NotARepo`
-- [ ] 2.3 Implement base resolution (`rev-parse --verify --end-of-options <rev>^{commit}`, default `HEAD`); verify integration tests for branch, tag, SHA prefix, `HEAD~N`, unresolvable ref → `BadRevision`, and a repo with no commits → `BadRevision`
-- [ ] 2.4 Add an integration-test helper that builds throwaway repos in `tempfile` dirs with real `git` (commits, edits, staged changes, renames, binaries, ignores); verify it is used by the tests in 2.2–2.3
+- [x] 2.1 Implement the git process runner (flags `--no-pager`, `-c core.quotepath=false`, `GIT_OPTIONAL_LOCKS=0`, `CREATE_NO_WINDOW` on Windows, async, captured stdout/stderr) and the typed error enum (`NotARepo`, `GitNotFound`, `BadRevision`, `Io`, `Git{stderr}`); verify unit tests for error mapping, including a missing-executable case
+- [x] 2.2 Implement `open_repo` (`rev-parse --show-toplevel`, git version check ≥ 2.30); verify integration tests: repo root, subfolder resolves to top level, non-repo folder → `NotARepo`
+- [x] 2.3 Implement base resolution (`rev-parse --verify --end-of-options <rev>^{commit}`, default `HEAD`); verify integration tests for branch, tag, SHA prefix, `HEAD~N`, unresolvable ref → `BadRevision`, and a repo with no commits → `BadRevision`
+- [x] 2.4 Add an integration-test helper that builds throwaway repos in `tempfile` dirs with real `git` (commits, edits, staged changes, renames, binaries, ignores); verify it is used by the tests in 2.2–2.3
 
 ## 3. Diff model and parser (repo-diff)
 
