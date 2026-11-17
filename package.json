@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf-repo": "node scripts/make-perf-repo.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.26",
