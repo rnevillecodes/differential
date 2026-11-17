@@ -82,3 +82,25 @@ fn errors_arrive_as_kind_and_message() {
     assert_eq!(err["kind"], "notARepo");
     assert!(err["message"].as_str().unwrap().contains("not inside a git repository"));
 }
+
+#[test]
+fn file_browsing_commands_round_trip_through_ipc() {
+    let repo = TestRepo::with_files(&[("src/a.ts", "let a = 1;\n")]);
+    repo.write("new.txt", "fresh\n");
+    let (_app, w) = app(InitialArgs::default());
+    let root = repo.path().to_string_lossy().to_string();
+
+    let mut files: Vec<String> =
+        serde_json::from_value(invoke(&w, "list_files", json!({ "root": root })).unwrap()).unwrap();
+    files.sort();
+    assert_eq!(files, vec!["new.txt", "src/a.ts"]);
+
+    let view = invoke(&w, "view_file", json!({ "root": root, "path": "src/a.ts", "force": false })).unwrap();
+    assert_eq!(view, json!({ "kind": "text", "content": "let a = 1;\n" }));
+
+    let missing = invoke(&w, "view_file", json!({ "root": root, "path": "gone.ts", "force": false })).unwrap();
+    assert_eq!(missing, json!({ "kind": "missing" }));
+
+    let err = invoke(&w, "view_file", json!({ "root": root, "path": "../x", "force": false })).unwrap_err();
+    assert_eq!(err["kind"], "invalid");
+}

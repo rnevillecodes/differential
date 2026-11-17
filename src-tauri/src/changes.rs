@@ -4,25 +4,18 @@
 //! and reads files from disk, and never touches the index, refs or working tree.
 
 use std::collections::HashMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 use crate::diff::intraline::annotate_hunk;
 use crate::diff::model::{
     ChangeSet, FileDiff, FileStatus, FileSummary, Hunk, Line, LineKind, Side, Totals,
 };
 use crate::diff::parser::parse_patch;
+use crate::content::{is_binary_bytes, safe_join, sniff_binary, to_text};
 use crate::error::{AppError, Result};
 use crate::git::{resolve_base, Git};
 
-/// Thresholds above which a file is "large" and its hunks are only produced on request.
-pub mod limits {
-    /// Added + removed lines.
-    pub const MAX_CHANGED_LINES: u32 = 10_000;
-    /// Size of either version, in bytes.
-    pub const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
-    /// Bytes inspected for a NUL to classify a file as binary (git's heuristic).
-    pub const BINARY_SNIFF_BYTES: usize = 8000;
-}
+pub use crate::content::limits;
 
 const DIFF_FLAGS: [&str; 3] = ["--no-color", "--no-ext-diff", "-M"];
 
@@ -211,16 +204,7 @@ fn untracked_files(git: &Git, root: &Path) -> Result<Vec<FileSummary>> {
     Ok(files)
 }
 
-fn is_binary_bytes(bytes: &[u8]) -> bool {
-    bytes[..bytes.len().min(limits::BINARY_SNIFF_BYTES)].contains(&0)
-}
 
-fn sniff_binary(path: &Path) -> Result<bool> {
-    use std::io::Read;
-    let mut buf = vec![0u8; limits::BINARY_SNIFF_BYTES];
-    let n = std::fs::File::open(path)?.read(&mut buf)?;
-    Ok(buf[..n].contains(&0))
-}
 
 fn count_lines(bytes: &[u8]) -> u32 {
     let newlines = bytes.iter().filter(|&&b| b == b'\n').count() as u32;
@@ -352,19 +336,9 @@ pub fn file_content(
             Err(e) => return Err(e.into()),
         },
     };
-    Ok(Some(String::from_utf8_lossy(&bytes).replace("\r\n", "\n")))
+    Ok(Some(to_text(&bytes)))
 }
 
-/// Join a repo-relative path onto `root`, rejecting absolute paths and `..`.
-fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
-    let p = Path::new(rel);
-    if p.components()
-        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
-    {
-        return Err(AppError::Invalid(format!("invalid path: {rel}")));
-    }
-    Ok(root.join(p))
-}
 
 #[cfg(test)]
 mod tests {
@@ -403,14 +377,5 @@ mod tests {
         assert_eq!(d.hunks[0].lines[1].new_no, Some(2));
         assert!(d.new_no_eof_newline);
         assert!(synthesize_added(0, "").hunks.is_empty());
-    }
-
-    #[test]
-    fn rejects_escaping_paths() {
-        let root = Path::new("C:/repo");
-        assert!(safe_join(root, "../x").is_err());
-        assert!(safe_join(root, "a/../../x").is_err());
-        assert!(safe_join(root, "C:/Windows/x").is_err());
-        assert!(safe_join(root, "src/a.rs").is_ok());
     }
 }

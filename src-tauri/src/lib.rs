@@ -1,7 +1,9 @@
 pub mod changes;
 pub mod commands;
+pub mod content;
 pub mod diff;
 pub mod error;
+pub mod files;
 pub mod git;
 
 use commands::InitialArgs;
@@ -20,6 +22,8 @@ pub fn configure<R: tauri::Runtime>(
             commands::list_changes,
             commands::file_diff,
             commands::file_content,
+            commands::list_files,
+            commands::view_file,
         ])
 }
 
