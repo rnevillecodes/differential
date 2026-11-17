@@ -68,6 +68,47 @@ impl Git {
         })
     }
 
+    /// Run git feeding `input` on stdin, mapping a non-zero exit to an error.
+    pub fn run_with_stdin<S: AsRef<OsStr>>(
+        &self,
+        cwd: &Path,
+        args: &[S],
+        input: &[u8],
+    ) -> Result<Vec<u8>> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = self
+            .command(cwd)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    AppError::GitNotFound
+                } else {
+                    AppError::from(e)
+                }
+            })?;
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        let input = input.to_vec();
+        // Write on another thread so a large output can't deadlock against our input.
+        let writer = std::thread::spawn(move || stdin.write_all(&input));
+        let out = child.wait_with_output()?;
+        writer
+            .join()
+            .map_err(|_| AppError::Io("stdin writer panicked".into()))??;
+        if out.status.success() {
+            Ok(out.stdout)
+        } else {
+            Err(classify_failure(
+                cwd,
+                String::from_utf8_lossy(&out.stderr).trim(),
+            ))
+        }
+    }
+
     /// Run git, mapping a non-zero exit to an error.
     pub fn run<S: AsRef<OsStr>>(&self, cwd: &Path, args: &[S]) -> Result<Vec<u8>> {
         let out = self.run_raw(cwd, args)?;

@@ -3,10 +3,10 @@
 //! These types are the source of truth; TypeScript bindings are generated into
 //! `src/model/` by ts-rs when `cargo test` runs.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum FileStatus {
@@ -18,7 +18,7 @@ pub enum FileStatus {
 }
 
 /// One changed file, without its hunks.
-#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct FileSummary {
@@ -128,7 +128,7 @@ pub struct FileDiff {
 }
 
 /// Which version of a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum Side {
