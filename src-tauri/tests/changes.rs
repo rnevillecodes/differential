@@ -1,10 +1,10 @@
 mod common;
 
 use common::TestRepo;
-use mydiff_lib::changes::{file_content, file_diff, limits, list_changes};
-use mydiff_lib::diff::model::{ChangeSet, FileStatus, FileSummary, LineKind, Side};
-use mydiff_lib::error::AppError;
-use mydiff_lib::git::Git;
+use differential_lib::changes::{file_content, file_diff, limits, list_changes};
+use differential_lib::diff::model::{ChangeSet, FileStatus, FileSummary, LineKind, Side};
+use differential_lib::error::AppError;
+use differential_lib::git::Git;
 
 fn find<'a>(cs: &'a ChangeSet, path: &str) -> &'a FileSummary {
     cs.files

@@ -4,7 +4,7 @@
 mod common;
 
 use common::TestRepo;
-use mydiff_lib::commands::InitialArgs;
+use differential_lib::commands::InitialArgs;
 use serde_json::{json, Value};
 use tauri::ipc::{CallbackFn, InvokeBody};
 use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
@@ -12,7 +12,7 @@ use tauri::webview::InvokeRequest;
 use tauri::{WebviewWindow, WebviewWindowBuilder};
 
 fn app(args: InitialArgs) -> (tauri::App<tauri::test::MockRuntime>, WebviewWindow<tauri::test::MockRuntime>) {
-    let app = mydiff_lib::configure(mock_builder(), args)
+    let app = differential_lib::configure(mock_builder(), args)
         .build(mock_context(noop_assets()))
         .expect("build app");
     let webview = WebviewWindowBuilder::new(&app, "main", Default::default())

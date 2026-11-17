@@ -1,8 +1,8 @@
 mod common;
 
 use common::TestRepo;
-use mydiff_lib::error::AppError;
-use mydiff_lib::git::{open_repo, resolve_base, Git};
+use differential_lib::error::AppError;
+use differential_lib::git::{open_repo, resolve_base, Git};
 use std::path::Path;
 
 fn same_path(a: &str, b: &Path) -> bool {

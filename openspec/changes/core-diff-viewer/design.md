@@ -112,7 +112,7 @@ Highlighting only hunk lines breaks multi-line constructs (block comments, templ
 Plain React state + a small Zustand store (repo, base, changeset, selected file, view mode). View mode persists in `localStorage` (persists in the Tauri webview profile). Keyboard: `]` / `[` next/previous file, `Ctrl+R` refresh, `Ctrl+O` open repo, `Ctrl+\` toggle view (adjustable later).
 
 ### 12. Launch arguments and folder picker
-`mydiff [path] [--base <rev>]`, parsed in Rust from `std::env::args` at startup and exposed to the frontend via an `initial_args` command. Folder picker uses `tauri-plugin-dialog`. Tauri capabilities are restricted to the dialog plugin and our own commands (no fs/shell plugins exposed to the webview).
+`differential [path] [--base <rev>]`, parsed in Rust from `std::env::args` at startup and exposed to the frontend via an `initial_args` command. Folder picker uses `tauri-plugin-dialog`. Tauri capabilities are restricted to the dialog plugin and our own commands (no fs/shell plugins exposed to the webview).
 
 ### 13. Testing strategy
 - Rust unit tests: parser against fixture patches (renames, no-EOF-newline, binary, empty hunks, CRLF, unicode paths); intraline ranges.
@@ -132,5 +132,5 @@ Plain React state + a small Zustand store (repo, base, changeset, selected file,
 
 ## Open Questions
 
-- Final product/binary name (assumed `mydiff`).
+- Final product/binary name: `differential` (resolved).
 - Exact keyboard shortcuts and theme colors (tunable without affecting specs or structure).

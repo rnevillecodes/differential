@@ -12,7 +12,7 @@ use crate::diff::model::{ChangeSet, FileDiff, FileSummary, Side};
 use crate::error::{AppError, Result};
 use crate::git::{self, Git, RepoInfo};
 
-/// Repository and base given on the command line: `mydiff [path] [--base <rev>]`.
+/// Repository and base given on the command line: `differential [path] [--base <rev>]`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct InitialArgs {
