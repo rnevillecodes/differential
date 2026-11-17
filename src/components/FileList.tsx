@@ -1,0 +1,117 @@
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { memo, useEffect, useRef } from "react";
+import type { FileStatus } from "../model/FileStatus";
+import type { FileSummary } from "../model/FileSummary";
+import { displayPath, useApp } from "../store";
+
+const ROW_HEIGHT = 28;
+
+const STATUS_LETTER: Record<FileStatus, string> = {
+  added: "A",
+  modified: "M",
+  deleted: "D",
+  renamed: "R",
+  untracked: "U",
+};
+
+function splitPath(path: string): [dir: string, name: string] {
+  const i = path.lastIndexOf("/");
+  return i === -1 ? ["", path] : [path.slice(0, i + 1), path.slice(i + 1)];
+}
+
+export function FileList() {
+  const changes = useApp((s) => s.changes);
+  const selectedId = useApp((s) => s.selectedId);
+  const select = useApp((s) => s.select);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const files = changes?.files ?? [];
+
+  const virtualizer = useVirtualizer({
+    count: files.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 20,
+  });
+
+  useEffect(() => {
+    if (selectedId !== null && selectedId < files.length) virtualizer.scrollToIndex(selectedId, { align: "auto" });
+  }, [selectedId, files.length, virtualizer]);
+
+  if (!changes) return <nav className="file-list" aria-label="Changed files" />;
+
+  const { totals } = changes;
+  return (
+    <nav className="file-list" aria-label="Changed files">
+      <div className="file-list-header">
+        <span>
+          {totals.files} {totals.files === 1 ? "file" : "files"}
+        </span>
+        <span className="stat-add">+{totals.additions}</span>
+        <span className="stat-del">−{totals.deletions}</span>
+      </div>
+      <div className="file-list-scroll" ref={scrollRef} role="listbox" aria-label="Files">
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((item) => {
+            const f = files[item.index];
+            return (
+              <FileRow
+                key={f.id}
+                file={f}
+                selected={f.id === selectedId}
+                top={item.start}
+                onSelect={select}
+              />
+            );
+          })}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+const FileRow = memo(function FileRow({
+  file,
+  selected,
+  top,
+  onSelect,
+}: {
+  file: FileSummary;
+  selected: boolean;
+  top: number;
+  onSelect: (id: number) => void;
+}) {
+  const path = displayPath(file);
+  const [dir, name] = splitPath(path);
+  const renamedFrom = file.status === "renamed" ? file.oldPath : null;
+  const title = renamedFrom ? `${renamedFrom} → ${path}` : path;
+  return (
+    <div
+      className="file-row"
+      role="option"
+      aria-selected={selected}
+      style={{ transform: `translateY(${top}px)` }}
+      onClick={() => onSelect(file.id)}
+      title={title}
+      data-testid="file-row"
+    >
+      <span className={`status status-${file.status}`} aria-label={file.status}>
+        {STATUS_LETTER[file.status]}
+      </span>
+      <span className="file-path">
+        <bdi>
+          {renamedFrom && <span className="dir">{renamedFrom} → </span>}
+          <span className="dir">{dir}</span>
+          {name}
+        </bdi>
+      </span>
+      {file.isBinary && <span className="tag">binary</span>}
+      {file.isLarge && <span className="tag">large</span>}
+      {!file.isBinary && (
+        <>
+          <span className="stat-add">+{file.additions}</span>
+          <span className="stat-del">−{file.deletions}</span>
+        </>
+      )}
+    </div>
+  );
+});
