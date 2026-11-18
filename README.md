@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="src-tauri/icons/app-icon.svg" alt="differential logo" width="128" height="128">
+  <img src="src-tauri/icons/app-icon.svg" alt="Differential logo" width="128" height="128">
 </p>
 
-# differential
+# Differential
 
 A fast, read-only desktop diff viewer for reviewing a git repository's changes — built for checking what a coding agent changed. It diffs a chosen **base ref** (default `HEAD`) against the **working tree**, including uncommitted and untracked files, and never modifies the repository.
 
@@ -26,7 +26,7 @@ npm install
 differential [path] [--base <rev>]
 ```
 
-- `path` — any folder inside a git repository (resolved to the repository root). Without it, differential starts on an "Open a repository" screen.
+- `path` — any folder inside a git repository (resolved to the repository root). Without it, Differential starts on an "Open a repository" screen.
 - `--base <rev>` — any revision git understands: branch, tag, SHA, `HEAD~3`, … Defaults to `HEAD`. The base can also be changed in the toolbar (see [Comparing against a branch](#comparing-against-a-branch)).
 
 Examples (after `npm run tauri build`):
@@ -46,7 +46,7 @@ The toolbar shows the open repository's path. Click it (or press `Ctrl+O`) for a
 
 Click **Base** in the toolbar to pick what the working tree is compared against. The list shows the repository's local branches, remote branches, and tags (most recently updated first, the checked-out branch marked *current*); type to filter it. Picking one diffs your current files — committed, uncommitted, and untracked — against that branch's latest commit. Your checkout is never switched or modified.
 
-Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and choose **Use "…"**. Remote branches are shown as of your last `git fetch`; differential never fetches. Refresh (`Ctrl+R`) reloads the list.
+Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and choose **Use "…"**. Remote branches are shown as of your last `git fetch`; Differential never fetches. Refresh (`Ctrl+R`) reloads the list.
 
 ### Keyboard shortcuts
 
