@@ -77,6 +77,12 @@ export function fakeApi(over: Partial<Api> = {}): Api {
     fileContent: vi.fn(async () => "x\n"),
     listFiles: vi.fn(async () => ["a.ts", "b.ts", "README.md"]),
     viewFile: vi.fn(async () => ({ kind: "text" as const, content: "x\n" })),
+    listRefs: vi.fn(async () => [
+      { name: "feature", rev: "feature", kind: "local" as const, current: true },
+      { name: "main", rev: "main", kind: "local" as const, current: false },
+      { name: "origin/main", rev: "origin/main", kind: "remote" as const, current: false },
+      { name: "v1.0", rev: "v1.0", kind: "tag" as const, current: false },
+    ]),
     pickFolder: vi.fn(async () => null),
     ...over,
   };

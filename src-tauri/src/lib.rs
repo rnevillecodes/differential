@@ -24,6 +24,7 @@ pub fn configure<R: tauri::Runtime>(
             commands::file_content,
             commands::list_files,
             commands::view_file,
+            commands::list_refs,
         ])
 }
 

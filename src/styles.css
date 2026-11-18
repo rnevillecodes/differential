@@ -293,18 +293,120 @@ button:focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
-.toolbar form {
+/* ---- base picker ---- */
+
+.base-picker {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: none;
 }
-.toolbar .base-input {
-  width: 160px;
-  font-family: var(--font-mono);
+.base-label {
+  color: var(--muted);
   font-size: 12px;
 }
-.toolbar .base-input[aria-invalid="true"] {
+.base-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  max-width: 240px;
+  padding: 3px 8px;
+  justify-content: space-between;
+}
+.base-trigger[aria-invalid="true"] {
   border-color: var(--danger);
+}
+.base-trigger svg {
+  flex: none;
+  color: var(--muted);
+}
+.base-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.base-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: min(380px, calc(100vw - 20px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.base-search {
+  margin: 8px;
+  font-size: 13px;
+}
+.ref-options {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.ref-group {
+  padding: 8px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ref-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  cursor: pointer;
+}
+.ref-option.active {
+  background: var(--selected);
+}
+.ref-check {
+  flex: none;
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--accent);
+}
+.ref-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-option-typed .ref-name {
+  font-family: var(--font-ui);
+}
+.ref-option-typed code {
+  font-family: var(--font-mono);
+}
+.ref-current {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ref-note {
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ref-note.error {
+  color: var(--danger);
 }
 .toolbar .base-error {
   color: var(--danger);

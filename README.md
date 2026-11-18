@@ -23,7 +23,7 @@ differential [path] [--base <rev>]
 ```
 
 - `path` — any folder inside a git repository (resolved to the repository root). Without it, differential starts on an "Open a repository" screen (or press `Ctrl+O`).
-- `--base <rev>` — any revision git understands: branch, tag, SHA, `HEAD~3`, … Defaults to `HEAD`. The base can also be changed in the toolbar.
+- `--base <rev>` — any revision git understands: branch, tag, SHA, `HEAD~3`, … Defaults to `HEAD`. The base can also be changed in the toolbar (see [Comparing against a branch](#comparing-against-a-branch)).
 
 Examples (after `npm run tauri build`):
 
@@ -31,6 +31,12 @@ Examples (after `npm run tauri build`):
 src-tauri/target/release/differential C:/code/my-project
 src-tauri/target/release/differential C:/code/my-project --base main
 ```
+
+### Comparing against a branch
+
+Click **Base** in the toolbar to pick what the working tree is compared against. The list shows the repository's local branches, remote branches, and tags (most recently updated first, the checked-out branch marked *current*); type to filter it. Picking one diffs your current files — committed, uncommitted, and untracked — against that branch's latest commit. Your checkout is never switched or modified.
+
+Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and choose **Use "…"**. Remote branches are shown as of your last `git fetch`; differential never fetches. Refresh (`Ctrl+R`) reloads the list.
 
 ### Keyboard shortcuts
 

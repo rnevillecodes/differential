@@ -252,6 +252,49 @@ describe("tabs", () => {
   });
 });
 
+describe("branch and tag list", () => {
+  it("loads on open and reloads on refresh, but not on a base change", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    expect(api.listRefs).toHaveBeenCalledWith("C:/repo");
+    expect(store.getState().refs?.map((r) => r.name)).toEqual(["feature", "main", "origin/main", "v1.0"]);
+    await store.getState().setBase("main");
+    expect(api.listRefs).toHaveBeenCalledTimes(1);
+    await store.getState().refresh();
+    expect(api.listRefs).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a stale response and resets for a new repository", async () => {
+    let resolveSlow!: (v: Awaited<ReturnType<typeof api.listRefs>>) => void;
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    vi.mocked(api.listRefs)
+      .mockImplementationOnce(() => new Promise((r) => (resolveSlow = r)))
+      .mockResolvedValueOnce([{ name: "fresh", rev: "fresh", kind: "local", current: true }]);
+    const slow = store.getState().refresh();
+    await store.getState().refresh();
+    resolveSlow([{ name: "stale", rev: "stale", kind: "local", current: true }]);
+    await slow;
+    expect(store.getState().refs?.map((r) => r.name)).toEqual(["fresh"]);
+
+    vi.mocked(api.openRepo).mockImplementationOnce(() => new Promise(() => {})); // never opens
+    void store.getState().openPath("C:/other");
+    expect(store.getState().refs).toBeNull();
+  });
+
+  it("reports a listing failure without blocking the diff", async () => {
+    const api = fakeApi({ listRefs: vi.fn(async () => Promise.reject({ kind: "git", message: "boom" })) });
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    expect(store.getState().refsError?.message).toBe("boom");
+    expect(store.getState().refs).toBeNull();
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().changes).not.toBeNull();
+  });
+});
+
 describe("recent repositories", () => {
   it("records opened repositories most recent first, without duplicates, and persists them", async () => {
     const storage = memoryStorage();

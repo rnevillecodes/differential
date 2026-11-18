@@ -78,6 +78,14 @@ export function FilesIcon(props: IconProps) {
   );
 }
 
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon width={12} height={12} {...props}>
+      <path d="M3 8.5l3.5 3.5L13 4.5" />
+    </Icon>
+  );
+}
+
 export function ChevronDownIcon(props: IconProps) {
   return (
     <Icon width={12} height={12} {...props}>

@@ -11,6 +11,7 @@ import type { ErrorPayload } from "./model/ErrorPayload";
 import type { FileDiff } from "./model/FileDiff";
 import type { FileSummary } from "./model/FileSummary";
 import type { FileView } from "./model/FileView";
+import type { RefInfo } from "./model/RefInfo";
 import type { RepoInfo } from "./model/RepoInfo";
 import { ancestorsOf } from "./tree/build";
 
@@ -66,6 +67,10 @@ export interface AppState {
   /** Every project file, once the Files tab has been opened for this repo. */
   projectFiles: string[] | null;
   filesError: ErrorPayload | null;
+  /** The repository's branches and tags, for the base picker; loaded on open and refresh. */
+  refs: RefInfo[] | null;
+  /** Why the refs could not be listed; never blocks the diff. */
+  refsError: ErrorPayload | null;
   /** Expanded folder paths in the project tree. */
   expanded: ReadonlySet<string>;
   /** Open tabs, in display order. At most one is a preview tab. */
@@ -200,6 +205,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
   // latest request for its path and the path is still open.
   let viewSeq = 0;
   const viewLatest = new Map<string, number>();
+  // Incremented on every ref-list load and on opening a repository; stale responses are dropped.
+  let refsGen = 0;
   let initialized = false;
 
   return createStore<AppState>((set, get) => {
@@ -224,6 +231,19 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         filesError: null,
         expanded: new Set([...expanded].filter((p) => folders.has(p))),
       });
+    };
+
+    /** Load the branch/tag list; a response is applied only if no newer load or repo superseded it. */
+    const loadRefs = (root: string): Promise<void> => {
+      const gen = ++refsGen;
+      return api.listRefs(root).then(
+        (refs) => {
+          if (gen === refsGen) set({ refs, refsError: null });
+        },
+        (e) => {
+          if (gen === refsGen) set({ refs: null, refsError: toErrorPayload(e) });
+        },
+      );
     };
 
     const loadChanges = async (root: string, base: string, keepTabs: boolean): Promise<boolean> => {
@@ -438,6 +458,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       sidebarOpen: storage.get(SIDEBAR_OPEN_KEY) !== "false",
       projectFiles: null,
       filesError: null,
+      refs: null,
+      refsError: null,
       expanded: new Set(),
       tabs: [],
       activePath: null,
@@ -460,6 +482,7 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
 
       async openPath(path, base) {
         generation++;
+        refsGen++;
         viewLatest.clear();
         set({
           loading: true,
@@ -467,6 +490,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
           baseError: null,
           projectFiles: null,
           filesError: null,
+          refs: null,
+          refsError: null,
           expanded: new Set(),
           tabs: [],
           activePath: null,
@@ -484,7 +509,9 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         setRecent(
           [repo.root, ...get().recentRepos.filter((r) => !sameRoot(r, repo.root))].slice(0, MAX_RECENT_REPOS),
         );
+        const refsLoaded = loadRefs(repo.root);
         await loadChanges(repo.root, base?.trim() || "HEAD", false);
+        await refsLoaded;
       },
 
       async pickAndOpen() {
@@ -501,7 +528,9 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       async refresh() {
         const { repo, base } = get();
         if (!repo) return;
+        const refsLoaded = loadRefs(repo.root);
         await loadChanges(repo.root, base, true);
+        await refsLoaded;
       },
 
       select(id, pin = false) {

@@ -58,9 +58,10 @@ describe("file list", () => {
     expect(screen.getAllByTestId("file-row")[1]).toHaveAttribute("aria-selected", "true");
   });
 
-  it("does not navigate while typing in the base input", async () => {
+  it("does not navigate while typing in the base search", async () => {
     const { store } = await renderApp();
-    fireEvent.keyDown(screen.getByLabelText("Base"), { key: "]" });
+    fireEvent.click(screen.getByRole("button", { name: /^Base/ }));
+    fireEvent.keyDown(screen.getByRole("combobox", { name: "Search branches and tags" }), { key: "]" });
     expect(store.getState().selectedId).toBe(0);
   });
 

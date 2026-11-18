@@ -104,3 +104,16 @@ fn file_browsing_commands_round_trip_through_ipc() {
     let err = invoke(&w, "view_file", json!({ "root": root, "path": "../x", "force": false })).unwrap_err();
     assert_eq!(err["kind"], "invalid");
 }
+
+#[test]
+fn list_refs_round_trips_through_ipc() {
+    let repo = TestRepo::with_files(&[("a.txt", "a\n")]);
+    repo.git(&["tag", "v1.0"]);
+    let (_app, w) = app(InitialArgs::default());
+    let root = repo.path().to_string_lossy().to_string();
+
+    let refs = invoke(&w, "list_refs", json!({ "root": root })).unwrap();
+    let refs = refs.as_array().unwrap();
+    assert!(refs.contains(&json!({ "name": "main", "rev": "main", "kind": "local", "current": true })));
+    assert!(refs.contains(&json!({ "name": "v1.0", "rev": "v1.0", "kind": "tag", "current": false })));
+}

@@ -7,6 +7,7 @@ import type { ErrorPayload } from "../model/ErrorPayload";
 import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
 import type { FileView } from "../model/FileView";
+import type { RefInfo } from "../model/RefInfo";
 import type { RepoInfo } from "../model/RepoInfo";
 import type { Side } from "../model/Side";
 
@@ -26,6 +27,8 @@ export interface Api {
   listFiles(root: string): Promise<string[]>;
   /** One working-tree file for display; large files are only read with `force`. */
   viewFile(root: string, path: string, force: boolean): Promise<FileView>;
+  /** Local branches, remote-tracking branches and tags, most recent first. */
+  listRefs(root: string): Promise<RefInfo[]>;
   pickFolder(): Promise<string | null>;
 }
 
@@ -37,6 +40,7 @@ export const tauriApi: Api = {
   fileContent: (root, baseSha, path, side) => invoke("file_content", { root, baseSha, path, side }),
   listFiles: (root) => invoke("list_files", { root }),
   viewFile: (root, path, force) => invoke("view_file", { root, path, force }),
+  listRefs: (root) => invoke("list_refs", { root }),
   pickFolder: async () => {
     const picked = await open({ directory: true, multiple: false, title: "Open repository" });
     return typeof picked === "string" ? picked : null;

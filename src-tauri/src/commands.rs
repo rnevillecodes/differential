@@ -11,7 +11,7 @@ use crate::changes;
 use crate::diff::model::{ChangeSet, FileDiff, FileSummary, Side};
 use crate::error::{AppError, Result};
 use crate::files::{self, FileView};
-use crate::git::{self, Git, RepoInfo};
+use crate::git::{self, Git, RefInfo, RepoInfo};
 
 /// Repository and base given on the command line: `differential [path] [--base <rev>]`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
@@ -95,6 +95,11 @@ pub async fn file_content(
 #[tauri::command]
 pub async fn list_files(root: String) -> Result<Vec<String>> {
     blocking(move || files::list_files(&Git::default(), Path::new(&root))).await
+}
+
+#[tauri::command]
+pub async fn list_refs(root: String) -> Result<Vec<RefInfo>> {
+    blocking(move || git::list_refs(&Git::default(), Path::new(&root))).await
 }
 
 #[tauri::command]
