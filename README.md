@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/app-icon.svg" alt="differential logo" width="128" height="128">
+</p>
+
 # differential
 
 A fast, read-only desktop diff viewer for reviewing a git repository's changes — built for checking what a coding agent changed. It diffs a chosen **base ref** (default `HEAD`) against the **working tree**, including uncommitted and untracked files, and never modifies the repository.
