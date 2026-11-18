@@ -138,10 +138,6 @@ button:focus-visible {
   background: var(--panel);
   min-width: 0;
 }
-.toolbar-logo {
-  flex: none;
-  margin: 0 2px 0 4px;
-}
 .start-logo {
   display: block;
   margin: 0 auto 16px;

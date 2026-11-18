@@ -32,6 +32,16 @@ pub fn run() {
     let cwd = std::env::current_dir().unwrap_or_default();
     let args = commands::parse_args(std::env::args().skip(1), &cwd);
     configure(tauri::Builder::default(), args)
+        .setup(|app| {
+            // Set the window icon from an embedded image so a changed icon always
+            // triggers a rebuild (the bundle icons alone can be served from a stale build).
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128@2x.png"))?;
+                window.set_icon(icon)?;
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
