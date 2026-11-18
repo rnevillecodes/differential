@@ -4,10 +4,11 @@ import { tauriApi } from "./api";
 import { DiffPane } from "./components/DiffPane";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
-import { createAppStore, StoreContext, type AppState } from "./store";
+import { createAppStore, StoreContext, useApp, type AppState } from "./store";
 
 /**
  * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O repository picker, Ctrl+\ toggle view,
+ * Ctrl+B toggle sidebar,
  * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs.
  */
 export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
@@ -23,6 +24,7 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
       if (key === "r") void s.refresh();
       else if (key === "o") s.setRepoPickerOpen(!s.repoPickerOpen);
       else if (key === "\\") s.toggleViewMode();
+      else if (key === "b") s.toggleSidebar();
       else if (key === "w") {
         if (s.activePath !== null) s.closeTab(s.activePath);
       } else return false;
@@ -55,11 +57,18 @@ export default function App({ store: injected }: { store?: StoreApi<AppState> })
     <StoreContext.Provider value={store}>
       <div className="app">
         <Toolbar />
-        <main className="main">
-          <Sidebar />
-          <DiffPane />
-        </main>
+        <Main />
       </div>
     </StoreContext.Provider>
+  );
+}
+
+function Main() {
+  const sidebarOpen = useApp((s) => s.sidebarOpen);
+  return (
+    <main className={`main${sidebarOpen ? "" : " sidebar-hidden"}`}>
+      {sidebarOpen && <Sidebar />}
+      <DiffPane />
+    </main>
   );
 }

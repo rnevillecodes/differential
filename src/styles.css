@@ -128,6 +128,12 @@ button:focus-visible {
   grid-template-columns: minmax(220px, 320px) 1fr;
   min-height: 0;
 }
+.main.sidebar-hidden {
+  grid-template-columns: 1fr;
+}
+.sidebar-toggle[aria-pressed="true"] {
+  color: var(--fg);
+}
 
 .toolbar {
   display: flex;
@@ -518,12 +524,42 @@ button:focus-visible {
   cursor: default;
 }
 
-.tree-message {
-  padding: 12px 10px;
+.sidebar-empty {
+  margin: auto;
+  padding: 24px 20px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
-.tree-message.error {
+.sidebar-empty-icon {
+  color: var(--muted);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+.sidebar-empty-title {
+  margin: 0;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sidebar-empty.error .sidebar-empty-title {
   color: var(--danger);
+}
+.sidebar-empty-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sidebar-empty code {
+  font-family: var(--font-mono);
+}
+.sidebar-empty button {
+  margin-top: 8px;
 }
 
 .tag {

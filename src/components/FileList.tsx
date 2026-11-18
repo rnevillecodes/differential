@@ -2,6 +2,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useRef } from "react";
 import type { FileSummary } from "../model/FileSummary";
 import { displayPath, useApp } from "../store";
+import { ChangesIcon } from "./icons";
+import { SidebarEmpty } from "./SidebarEmpty";
 import { StatusBadge } from "./status";
 
 const ROW_HEIGHT = 28;
@@ -12,7 +14,10 @@ function splitPath(path: string): [dir: string, name: string] {
 }
 
 export function FileList() {
+  const repo = useApp((s) => s.repo);
   const changes = useApp((s) => s.changes);
+  const loading = useApp((s) => s.loading);
+  const setPickerOpen = useApp((s) => s.setRepoPickerOpen);
   const selectedId = useApp((s) => s.selectedId);
   const select = useApp((s) => s.select);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -29,7 +34,35 @@ export function FileList() {
     if (selectedId !== null && selectedId < files.length) virtualizer.scrollToIndex(selectedId, { align: "auto" });
   }, [selectedId, files.length, virtualizer]);
 
-  if (!changes) return <nav className="file-list" aria-label="Changed files" />;
+  if (!repo) {
+    return (
+      <nav className="file-list" aria-label="Changed files">
+        <SidebarEmpty
+          icon={<ChangesIcon width={28} height={28} />}
+          title="No repository open"
+          action={{ label: "Open a repository…", onClick: () => setPickerOpen(true) }}
+        >
+          Open a repository to review its changes.
+        </SidebarEmpty>
+      </nav>
+    );
+  }
+  if (!changes) {
+    return (
+      <nav className="file-list" aria-label="Changed files">
+        {loading && <SidebarEmpty title="Loading changes…" />}
+      </nav>
+    );
+  }
+  if (changes.files.length === 0) {
+    return (
+      <nav className="file-list" aria-label="Changed files">
+        <SidebarEmpty icon={<ChangesIcon width={28} height={28} />} title="No changed files">
+          Nothing differs from <code>{changes.baseRef}</code>. Edits show up here after a refresh (Ctrl+R).
+        </SidebarEmpty>
+      </nav>
+    );
+  }
 
   const { totals } = changes;
   return (

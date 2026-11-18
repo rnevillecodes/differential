@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useApp } from "../store";
+import { SidebarIcon } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
@@ -11,6 +12,8 @@ export function Toolbar() {
   const setBase = useApp((s) => s.setBase);
   const refresh = useApp((s) => s.refresh);
   const setViewMode = useApp((s) => s.setViewMode);
+  const sidebarOpen = useApp((s) => s.sidebarOpen);
+  const toggleSidebar = useApp((s) => s.toggleSidebar);
 
   const [draft, setDraft] = useState(base);
   // Show the committed base whenever it changes (open, successful base change).
@@ -23,6 +26,16 @@ export function Toolbar() {
 
   return (
     <header className="toolbar">
+      <button
+        type="button"
+        className="icon-button sidebar-toggle"
+        onClick={toggleSidebar}
+        aria-pressed={sidebarOpen}
+        aria-label="Sidebar"
+        title={`${sidebarOpen ? "Hide" : "Show"} sidebar (Ctrl+B)`}
+      >
+        <SidebarIcon width={16} height={16} />
+      </button>
       <RepoPicker />
 
       <form onSubmit={submit}>

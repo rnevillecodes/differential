@@ -61,6 +61,8 @@ export interface AppState {
   files: Record<number, FileLoad>;
 
   sidebarTab: SidebarTab;
+  /** Whether the sidebar is shown (persisted). */
+  sidebarOpen: boolean;
   /** Every project file, once the Files tab has been opened for this repo. */
   projectFiles: string[] | null;
   filesError: ErrorPayload | null;
@@ -92,6 +94,7 @@ export interface AppState {
   toggleViewMode(): void;
 
   setSidebarTab(tab: SidebarTab): void;
+  toggleSidebar(): void;
   toggleFolder(path: string): void;
   setFolderExpanded(path: string, open: boolean): void;
   /** Collapse every folder in the project tree. */
@@ -140,6 +143,7 @@ export const browserStorage: KeyValue = {
 
 const VIEW_MODE_KEY = "differential.viewMode";
 const SIDEBAR_TAB_KEY = "differential.sidebarTab";
+const SIDEBAR_OPEN_KEY = "differential.sidebarOpen";
 const RECENT_REPOS_KEY = "differential.recentRepos";
 const MAX_RECENT_REPOS = 20;
 
@@ -431,6 +435,7 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       loading: false,
       files: {},
       sidebarTab: savedTab === "files" ? "files" : "changes",
+      sidebarOpen: storage.get(SIDEBAR_OPEN_KEY) !== "false",
       projectFiles: null,
       filesError: null,
       expanded: new Set(),
@@ -526,6 +531,12 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         // Load lazily, the first time the tab is shown for this repo; later change-set
         // loads refresh it too (see `wantFiles`).
         if (tab === "files" && get().projectFiles === null) loadFilesNow();
+      },
+
+      toggleSidebar() {
+        const open = !get().sidebarOpen;
+        storage.set(SIDEBAR_OPEN_KEY, String(open));
+        set({ sidebarOpen: open });
       },
 
       toggleFolder(path) {

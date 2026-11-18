@@ -2,7 +2,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp } from "../store";
 import { buildTree, flatten, parentOf, type TreeRow } from "../tree/build";
-import { CollapseAllIcon } from "./icons";
+import { CollapseAllIcon, FilesIcon } from "./icons";
+import { SidebarEmpty } from "./SidebarEmpty";
 import { StatusBadge } from "./status";
 
 const ROW_HEIGHT = 28;
@@ -19,6 +20,8 @@ export function FileTree() {
   const toggleFolder = useApp((s) => s.toggleFolder);
   const setFolderExpanded = useApp((s) => s.setFolderExpanded);
   const collapseAll = useApp((s) => s.collapseAll);
+  const setPickerOpen = useApp((s) => s.setRepoPickerOpen);
+  const refresh = useApp((s) => s.refresh);
   const reveal = useApp((s) => s.reveal);
   const openTreePath = useApp((s) => s.openTreePath);
 
@@ -55,20 +58,45 @@ export function FileTree() {
     }
   }, [selectedPath, indexOf, virtualizer]);
 
-  if (!repo) return <nav className="file-tree" aria-label="Project files" />;
+  if (!repo) {
+    return (
+      <nav className="file-tree" aria-label="Project files">
+        <SidebarEmpty
+          icon={<FilesIcon width={28} height={28} />}
+          title="No repository open"
+          action={{ label: "Open a repository…", onClick: () => setPickerOpen(true) }}
+        >
+          Open a repository to browse its files.
+        </SidebarEmpty>
+      </nav>
+    );
+  }
   if (filesError) {
     return (
       <nav className="file-tree" aria-label="Project files">
-        <div className="tree-message error" role="alert">
-          Could not list files: {filesError.message}
-        </div>
+        <SidebarEmpty
+          tone="error"
+          title="Could not list files"
+          action={{ label: "Try again", onClick: () => void refresh() }}
+        >
+          {filesError.message}
+        </SidebarEmpty>
       </nav>
     );
   }
   if (!tree) {
     return (
       <nav className="file-tree" aria-label="Project files">
-        <div className="tree-message">Loading files…</div>
+        <SidebarEmpty title="Loading files…" />
+      </nav>
+    );
+  }
+  if (tree.dirs.length === 0 && tree.files.length === 0) {
+    return (
+      <nav className="file-tree" aria-label="Project files">
+        <SidebarEmpty icon={<FilesIcon width={28} height={28} />} title="No files">
+          This repository has no tracked or untracked files yet.
+        </SidebarEmpty>
       </nav>
     );
   }

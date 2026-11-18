@@ -146,6 +146,64 @@ describe("project tree", () => {
   });
 });
 
+describe("sidebar empty states", () => {
+  it("prompts to open a repository on both tabs when none is open", async () => {
+    const store = createAppStore(explorerApi(), memoryStorage());
+    render(<App store={store} />);
+    const nav = screen.getByRole("navigation", { name: "Changed files" });
+    expect(within(nav).getByText("No repository open")).toBeInTheDocument();
+    fireEvent.click(within(nav).getByRole("button", { name: "Open a repository…" }));
+    expect(store.getState().repoPickerOpen).toBe(true);
+    act(() => store.getState().setRepoPickerOpen(false));
+    fireEvent.click(screen.getByRole("tab", { name: "Files" }));
+    expect(
+      within(screen.getByRole("navigation", { name: "Project files" })).getByText("No repository open"),
+    ).toBeInTheDocument();
+  });
+
+  it("says when there are no changes", async () => {
+    await renderApp(explorerApi({ listChanges: vi.fn(async () => changeSet([])) }), "changes");
+    const nav = screen.getByRole("navigation", { name: "Changed files" });
+    expect(within(nav).getByText("No changed files")).toBeInTheDocument();
+    expect(nav).toHaveTextContent("Nothing differs from HEAD.");
+  });
+
+  it("says when the repository has no files", async () => {
+    await renderApp(
+      explorerApi({ listChanges: vi.fn(async () => changeSet([])), listFiles: vi.fn(async () => []) }),
+    );
+    expect(within(screen.getByRole("navigation", { name: "Project files" })).getByText("No files")).toBeInTheDocument();
+  });
+
+  it("offers a retry when the listing fails", async () => {
+    const api = explorerApi({ listFiles: vi.fn(async () => Promise.reject({ kind: "git", message: "boom" })) });
+    await renderApp(api);
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not list files");
+    vi.mocked(api.listFiles).mockResolvedValueOnce(PROJECT);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await flush();
+    });
+    expect(screen.getByRole("tree")).toBeInTheDocument();
+  });
+});
+
+describe("sidebar toggle", () => {
+  it("hides and shows the sidebar from the toolbar and Ctrl+B, and remembers it", async () => {
+    const storage = memoryStorage();
+    const store = createAppStore(explorerApi(), storage);
+    render(<App store={store} />);
+    const toggle = screen.getByRole("button", { name: "Sidebar" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(createAppStore(explorerApi(), storage).getState().sidebarOpen).toBe(false);
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+    expect(screen.getByRole("complementary")).toBeInTheDocument();
+  });
+});
+
 describe("editor tabs", () => {
   const tabNames = () => screen.getAllByTestId("editor-tab").map((t) => t.querySelector(".editor-tab-name")!.textContent);
 
