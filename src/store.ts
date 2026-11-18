@@ -1,6 +1,6 @@
-// Application state: which repo/base is open, the change set, the selected file and
-// its loaded diff, the view mode, and the project explorer (sidebar tab, project
-// file listing, expanded folders, and the unchanged file being viewed).
+// Application state: which repo/base is open, the change set, the open file tabs and
+// their loaded diffs or contents, the view mode, and the project explorer (sidebar
+// tab, project file listing, expanded folders).
 
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { useStore } from "zustand";
@@ -34,9 +34,14 @@ export type ViewLoad =
   | { status: "notAFile" }
   | { status: "error"; error: ErrorPayload };
 
-export interface ViewedFile {
+/**
+ * An open tab in the main pane. It shows the path's diff while the path is in the
+ * change set, and the file's contents otherwise, so a refresh can switch it either way.
+ */
+export interface Tab {
   path: string;
-  load: ViewLoad;
+  /** A preview tab is replaced by the next file opened; pinning it keeps it open. */
+  preview: boolean;
 }
 
 export interface AppState {
@@ -44,7 +49,7 @@ export interface AppState {
   /** The base the current change set was computed against. */
   base: string;
   changes: ChangeSet | null;
-  /** Selected changed file. Never set while `viewed` is set. */
+  /** Id of the active tab's changed file; null when it shows an unchanged file or no tab is open. */
   selectedId: number | null;
   viewMode: ViewMode;
   /** Blocking error (git missing, not a repository, ...). */
@@ -61,15 +66,20 @@ export interface AppState {
   filesError: ErrorPayload | null;
   /** Expanded folder paths in the project tree. */
   expanded: ReadonlySet<string>;
-  /** Unchanged file shown in the main pane. Never set while `selectedId` is set. */
-  viewed: ViewedFile | null;
+  /** Open tabs, in display order. At most one is a preview tab. */
+  tabs: Tab[];
+  /** Path of the tab shown in the main pane. */
+  activePath: string | null;
+  /** Contents of open unchanged files, by path. */
+  views: Record<string, ViewLoad>;
 
   init(): Promise<void>;
   openPath(path: string, base?: string): Promise<void>;
   pickAndOpen(): Promise<void>;
   setBase(base: string): Promise<void>;
   refresh(): Promise<void>;
-  select(id: number): void;
+  /** Open a changed file in the preview tab, or in a pinned tab with `pin`. */
+  select(id: number, pin?: boolean): void;
   selectNext(): void;
   selectPrev(): void;
   loadLarge(id: number): void;
@@ -83,10 +93,17 @@ export interface AppState {
   collapseAll(): void;
   /** Expand every folder containing `path`. */
   reveal(path: string): void;
-  /** Open a file from the project tree: its diff if changed, else its contents. */
-  openTreePath(path: string): void;
-  /** Load the viewed file even though it is large. */
-  loadViewedAnyway(): void;
+  /** Open a file from the project tree (its diff if changed, else its contents), like `select`. */
+  openTreePath(path: string, pin?: boolean): void;
+  activateTab(path: string): void;
+  /** Close a tab; closing the active one activates its neighbour. */
+  closeTab(path: string): void;
+  /** Turn a preview tab into a regular one. */
+  pinTab(path: string): void;
+  /** Activate the tab `delta` places from the active one, wrapping around. */
+  cycleTab(delta: number): void;
+  /** Load an unchanged file even though it is large. */
+  loadViewAnyway(path: string): void;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -117,6 +134,19 @@ const SIDEBAR_TAB_KEY = "differential.sidebarTab";
 
 export const displayPath = (f: FileSummary): string => f.newPath ?? f.oldPath ?? "";
 
+const pathIndex = new WeakMap<ChangeSet, Map<string, FileSummary>>();
+
+/** The changed file shown at `path`, if any (indexed once per change set). */
+export function changeAt(changes: ChangeSet | null, path: string): FileSummary | undefined {
+  if (!changes) return undefined;
+  let index = pathIndex.get(changes);
+  if (!index) {
+    index = new Map(changes.files.map((f) => [displayPath(f), f]));
+    pathIndex.set(changes, index);
+  }
+  return index.get(path);
+}
+
 function toViewLoad(v: FileView): ViewLoad {
   switch (v.kind) {
     case "text":
@@ -138,8 +168,10 @@ function foldersOf(paths: Iterable<string>): Set<string> {
 export function createAppStore(api: Api, storage: KeyValue = browserStorage): StoreApi<AppState> {
   // Incremented on every change-set load; stale responses are dropped.
   let generation = 0;
-  // Incremented on every viewed-file request; stale responses are dropped.
-  let viewToken = 0;
+  // Every unchanged-file request gets a token; a response is applied only if it is the
+  // latest request for its path and the path is still open.
+  let viewSeq = 0;
+  const viewLatest = new Map<string, number>();
   let initialized = false;
 
   return createStore<AppState>((set, get) => {
@@ -166,7 +198,7 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       });
     };
 
-    const loadChanges = async (root: string, base: string, keepSelection: boolean): Promise<boolean> => {
+    const loadChanges = async (root: string, base: string, keepTabs: boolean): Promise<boolean> => {
       const gen = ++generation;
       set({ loading: true });
       const filesPromise = wantFiles() ? fetchFiles(root) : null;
@@ -174,16 +206,16 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         const changes = await api.listChanges(root, base);
         if (gen !== generation) return false;
         const prev = get();
-        const prevPath =
-          keepSelection && prev.changes && prev.selectedId !== null
-            ? displayPath(prev.changes.files[prev.selectedId])
-            : null;
-        const viewedPath = keepSelection ? (prev.viewed?.path ?? null) : null;
-        const findPath = (p: string | null) =>
-          p === null ? undefined : changes.files.find((f) => displayPath(f) === p);
-        const kept = findPath(prevPath) ?? findPath(viewedPath);
-        // Still viewing an unchanged file: keep it unless it now has changes.
-        const keepViewed = viewedPath !== null && !kept;
+        let tabs = keepTabs ? prev.tabs : [];
+        let activePath = keepTabs ? prev.activePath : null;
+        if (!keepTabs && changes.files.length > 0) {
+          activePath = displayPath(changes.files[0]);
+          tabs = [{ path: activePath, preview: true }];
+        }
+        const activeChange = activePath === null ? undefined : changeAt(changes, activePath);
+        // Diffs are keyed by id, so they all reload. Keep the active unchanged file's
+        // contents on screen while it is re-read; other tabs reload when activated.
+        const keptView = activePath !== null && !activeChange ? prev.views[activePath] : undefined;
         set({
           changes,
           base: changes.baseRef,
@@ -191,22 +223,20 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
           baseError: null,
           error: null,
           loading: false,
-          selectedId: kept ? kept.id : keepViewed ? null : changes.files.length > 0 ? 0 : null,
-          viewed: keepViewed ? get().viewed : null,
+          tabs,
+          activePath,
+          selectedId: activeChange?.id ?? null,
+          views: keptView ? { [activePath!]: keptView } : {},
         });
-        const sel = get().selectedId;
-        if (sel !== null) loadFile(sel, false);
+        if (activeChange) loadFile(activeChange.id, false);
         if (filesPromise) {
           const result = await filesPromise;
           if (gen !== generation) return true;
           applyFiles(result);
+          closeVanished();
         }
-        const viewed = get().viewed;
-        if (viewed) {
-          const listed = get().projectFiles;
-          if (listed && !listed.includes(viewed.path)) set({ viewed: null });
-          else loadViewed(viewed.path, false);
-        }
+        const active = get().activePath;
+        if (active !== null && active === activePath && !activeChange) loadView(active, false);
         return true;
       } catch (e) {
         if (gen !== generation) return false;
@@ -265,23 +295,89 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
 
     const setFile = (id: number, load: FileLoad) => set({ files: { ...get().files, [id]: load } });
 
-    const loadViewed = (path: string, force: boolean) => {
+    const setView = (path: string, load: ViewLoad) => set({ views: { ...get().views, [path]: load } });
+
+    const loadView = (path: string, force: boolean) => {
       const { repo } = get();
       if (!repo) return;
-      const token = ++viewToken;
-      const current = get().viewed;
+      const token = ++viewSeq;
+      viewLatest.set(path, token);
+      const current = get().views[path];
       // Keep showing the old contents while a refresh re-reads the same file.
-      const keep = current?.path === path && current.load.status === "ready" && !force;
-      set({ selectedId: null, viewed: { path, load: keep ? current.load : { status: "loading" } } });
+      const keep = current?.status === "ready" && !force;
+      setView(path, keep ? current : { status: "loading" });
+      const live = () => viewLatest.get(path) === token && get().tabs.some((t) => t.path === path);
       api.viewFile(repo.root, path, force).then(
         (v) => {
-          if (token === viewToken && get().viewed?.path === path) set({ viewed: { path, load: toViewLoad(v) } });
+          if (live()) setView(path, toViewLoad(v));
         },
         (e) => {
-          if (token === viewToken && get().viewed?.path === path)
-            set({ viewed: { path, load: { status: "error", error: toErrorPayload(e) } } });
+          if (live()) setView(path, { status: "error", error: toErrorPayload(e) });
         },
       );
+    };
+
+    /** Show `path` (already a tab) in the main pane, loading it if needed. */
+    const activate = (path: string | null) => {
+      const change = path === null ? undefined : changeAt(get().changes, path);
+      set({ activePath: path, selectedId: change?.id ?? null });
+      if (path === null) return;
+      if (change) {
+        if (!get().files[change.id]) loadFile(change.id, false);
+      } else if (!get().views[path]) {
+        loadView(path, false);
+      }
+    };
+
+    /** Open `path` in a tab: reuse its tab, else replace the preview tab, else add one after the active tab. */
+    const open = (path: string, pin: boolean) => {
+      const { tabs, activePath } = get();
+      const i = tabs.findIndex((t) => t.path === path);
+      let next = tabs;
+      if (i >= 0) {
+        if (pin && tabs[i].preview) next = tabs.map((t, j) => (j === i ? { path, preview: false } : t));
+      } else {
+        const tab = { path, preview: !pin };
+        const p = tabs.findIndex((t) => t.preview);
+        if (p >= 0) {
+          next = tabs.map((t, j) => (j === p ? tab : t));
+        } else {
+          const a = tabs.findIndex((t) => t.path === activePath);
+          const at = a < 0 ? tabs.length : a + 1;
+          next = [...tabs.slice(0, at), tab, ...tabs.slice(at)];
+        }
+      }
+      if (next !== tabs) setTabs(next);
+      activate(path);
+    };
+
+    /** Replace the tab list, dropping contents of files no longer open. */
+    const setTabs = (tabs: Tab[]) => {
+      const { views } = get();
+      const open = new Set(tabs.map((t) => t.path));
+      const kept = Object.fromEntries(Object.entries(views).filter(([p]) => open.has(p)));
+      set({ tabs, views: kept });
+    };
+
+    /** Close the tabs matching `drop`; if the active one closes, activate its nearest survivor. */
+    const removeTabs = (drop: (t: Tab) => boolean) => {
+      const { tabs, activePath } = get();
+      const next = tabs.filter((t) => !drop(t));
+      if (next.length === tabs.length) return;
+      setTabs(next);
+      if (activePath === null || next.some((t) => t.path === activePath)) return;
+      const i = tabs.findIndex((t) => t.path === activePath);
+      const after = tabs.slice(i + 1).find((t) => !drop(t));
+      const before = tabs.slice(0, i).reverse().find((t) => !drop(t));
+      activate((after ?? before)?.path ?? null);
+    };
+
+    /** Close tabs of files that are neither changed nor in the project listing any more. */
+    const closeVanished = () => {
+      const { projectFiles, changes } = get();
+      if (!projectFiles) return;
+      const listed = new Set(projectFiles);
+      removeTabs((t) => !listed.has(t.path) && !changeAt(changes, t.path));
     };
 
     const move = (delta: number) => {
@@ -309,7 +405,9 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       projectFiles: null,
       filesError: null,
       expanded: new Set(),
-      viewed: null,
+      tabs: [],
+      activePath: null,
+      views: {},
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -326,7 +424,7 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
 
       async openPath(path, base) {
         generation++;
-        viewToken++;
+        viewLatest.clear();
         set({
           loading: true,
           error: null,
@@ -334,7 +432,10 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
           projectFiles: null,
           filesError: null,
           expanded: new Set(),
-          viewed: null,
+          tabs: [],
+          activePath: null,
+          selectedId: null,
+          views: {},
         });
         let repo: RepoInfo;
         try {
@@ -364,11 +465,9 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         await loadChanges(repo.root, base, true);
       },
 
-      select(id) {
-        if (get().selectedId === id && get().files[id] && !get().viewed) return;
-        viewToken++;
-        set({ selectedId: id, viewed: null });
-        if (!get().files[id]) loadFile(id, false);
+      select(id, pin = false) {
+        const file = get().changes?.files[id];
+        if (file) open(displayPath(file), pin);
       },
 
       selectNext: () => move(1),
@@ -418,15 +517,33 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         if (missing.length > 0) set({ expanded: new Set([...expanded, ...missing]) });
       },
 
-      openTreePath(path) {
-        const changed = get().changes?.files.find((f) => displayPath(f) === path);
-        if (changed) get().select(changed.id);
-        else if (get().viewed?.path !== path) loadViewed(path, false);
+      openTreePath(path, pin = false) {
+        open(path, pin);
       },
 
-      loadViewedAnyway() {
-        const viewed = get().viewed;
-        if (viewed) loadViewed(viewed.path, true);
+      activateTab(path) {
+        if (get().tabs.some((t) => t.path === path)) activate(path);
+      },
+
+      closeTab(path) {
+        removeTabs((t) => t.path === path);
+      },
+
+      pinTab(path) {
+        const { tabs } = get();
+        if (tabs.some((t) => t.path === path && t.preview))
+          set({ tabs: tabs.map((t) => (t.path === path ? { path, preview: false } : t)) });
+      },
+
+      cycleTab(delta) {
+        const { tabs, activePath } = get();
+        if (tabs.length === 0) return;
+        const i = tabs.findIndex((t) => t.path === activePath);
+        activate(tabs[(((i < 0 ? 0 : i + delta) % tabs.length) + tabs.length) % tabs.length].path);
+      },
+
+      loadViewAnyway(path) {
+        if (get().tabs.some((t) => t.path === path)) loadView(path, true);
       },
     };
   });

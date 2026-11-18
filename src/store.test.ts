@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAppStore } from "./store";
+import { createAppStore, type AppState } from "./store";
 import { changeSet, fakeApi, flush, memoryStorage, summary } from "./test/fixtures";
 
 describe("app store", () => {
@@ -147,9 +147,117 @@ describe("app store", () => {
   });
 });
 
+describe("tabs", () => {
+  const paths = (s: AppState) => s.tabs.map((t) => (t.preview ? `(${t.path})` : t.path));
+
+  it("opens the first changed file in a preview tab", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    expect(paths(store.getState())).toEqual(["(a.ts)"]);
+    expect(store.getState().activePath).toBe("a.ts");
+  });
+
+  it("replaces the preview tab, and keeps pinned tabs open", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(1);
+    expect(paths(store.getState())).toEqual(["(b.ts)"]);
+    store.getState().pinTab("b.ts");
+    store.getState().openTreePath("README.md");
+    expect(paths(store.getState())).toEqual(["b.ts", "(README.md)"]);
+    store.getState().select(0, true);
+    expect(paths(store.getState())).toEqual(["b.ts", "a.ts"]);
+    expect(store.getState().selectedId).toBe(0);
+    // Opening an already-open file just switches to it.
+    store.getState().select(1);
+    expect(paths(store.getState())).toEqual(["b.ts", "a.ts"]);
+    expect(store.getState().activePath).toBe("b.ts");
+  });
+
+  it("inserts new tabs after the active one", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(0, true);
+    store.getState().select(1, true);
+    store.getState().activateTab("a.ts");
+    store.getState().openTreePath("README.md", true);
+    expect(paths(store.getState())).toEqual(["a.ts", "README.md", "b.ts"]);
+  });
+
+  it("closing the active tab activates its neighbour, then nothing", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(0, true);
+    store.getState().select(1, true);
+    store.getState().openTreePath("README.md", true);
+    store.getState().activateTab("b.ts");
+    store.getState().closeTab("b.ts");
+    expect(store.getState().activePath).toBe("README.md");
+    expect(store.getState().selectedId).toBeNull();
+    store.getState().closeTab("README.md");
+    expect(store.getState().activePath).toBe("a.ts");
+    expect(store.getState().selectedId).toBe(0);
+    store.getState().closeTab("a.ts");
+    expect(store.getState().tabs).toEqual([]);
+    expect(store.getState().activePath).toBeNull();
+    expect(store.getState().selectedId).toBeNull();
+  });
+
+  it("cycles through tabs, wrapping around", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(0, true);
+    store.getState().select(1, true);
+    store.getState().cycleTab(1);
+    expect(store.getState().activePath).toBe("a.ts");
+    store.getState().cycleTab(-1);
+    expect(store.getState().activePath).toBe("b.ts");
+  });
+
+  it("drops contents of closed files and ignores their late responses", async () => {
+    let resolve!: (v: { kind: "text"; content: string }) => void;
+    const api = fakeApi({ viewFile: vi.fn(() => new Promise<{ kind: "text"; content: string }>((r) => (resolve = r))) });
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md", true);
+    store.getState().closeTab("README.md");
+    resolve({ kind: "text", content: "late\n" });
+    await flush();
+    expect(store.getState().views).toEqual({});
+  });
+
+  it("refresh keeps open tabs and reloads only the active one", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(0, true);
+    store.getState().select(1, true);
+    await flush();
+    vi.mocked(api.fileDiff).mockClear();
+    await store.getState().refresh();
+    await flush();
+    expect(paths(store.getState())).toEqual(["a.ts", "b.ts"]);
+    expect(api.fileDiff).toHaveBeenCalledTimes(1);
+    expect(store.getState().files[0]).toBeUndefined();
+    store.getState().activateTab("a.ts");
+    expect(api.fileDiff).toHaveBeenCalledTimes(2);
+  });
+
+  it("opening another repository closes every tab", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().select(1, true);
+    await store.getState().openPath("C:/other");
+    expect(paths(store.getState())).toEqual(["(a.ts)"]);
+  });
+});
+
+/** The unchanged file shown in the main pane, if any. */
+const viewed = (s: AppState) =>
+  s.activePath !== null && s.selectedId === null ? { path: s.activePath, load: s.views[s.activePath] } : null;
+
 describe("project explorer state", () => {
-  const exclusive = (s: { selectedId: number | null; viewed: unknown }) =>
-    expect(s.selectedId !== null && s.viewed !== null).toBe(false);
+  const exclusive = (s: AppState) => expect(s.selectedId !== null && viewed(s) !== null).toBe(false);
 
   it("persists the sidebar tab and switching tabs keeps the main pane", async () => {
     const storage = memoryStorage();
@@ -160,7 +268,7 @@ describe("project explorer state", () => {
     store.getState().setSidebarTab("files");
     expect(storage.data["differential.sidebarTab"]).toBe("files");
     expect(store.getState().selectedId).toBe(1);
-    expect(store.getState().viewed).toBeNull();
+    expect(viewed(store.getState())).toBeNull();
     expect(createAppStore(fakeApi(), storage).getState().sidebarTab).toBe("files");
   });
 
@@ -230,14 +338,14 @@ describe("project explorer state", () => {
     store.getState().openTreePath("README.md");
     exclusive(store.getState());
     expect(store.getState().selectedId).toBeNull();
-    expect(store.getState().viewed?.load.status).toBe("loading");
+    expect(viewed(store.getState())?.load.status).toBe("loading");
     await flush();
     expect(api.viewFile).toHaveBeenCalledWith("C:/repo", "README.md", false);
-    expect(store.getState().viewed).toEqual({ path: "README.md", load: { status: "ready", content: "x\n" } });
+    expect(viewed(store.getState())).toEqual({ path: "README.md", load: { status: "ready", content: "x\n" } });
     store.getState().openTreePath("b.ts");
     exclusive(store.getState());
     expect(store.getState().selectedId).toBe(1);
-    expect(store.getState().viewed).toBeNull();
+    expect(viewed(store.getState())).toBeNull();
   });
 
   it("next-file from a viewed file selects the first changed file", async () => {
@@ -247,7 +355,7 @@ describe("project explorer state", () => {
     store.getState().selectNext();
     exclusive(store.getState());
     expect(store.getState().selectedId).toBe(0);
-    expect(store.getState().viewed).toBeNull();
+    expect(viewed(store.getState())).toBeNull();
   });
 
   it("loads a large viewed file on request", async () => {
@@ -260,11 +368,11 @@ describe("project explorer state", () => {
     await store.getState().openPath("C:/repo");
     store.getState().openTreePath("big.log");
     await flush();
-    expect(store.getState().viewed?.load).toEqual({ status: "large", size: 3_000_000 });
-    store.getState().loadViewedAnyway();
+    expect(viewed(store.getState())?.load).toEqual({ status: "large", size: 3_000_000 });
+    store.getState().loadViewAnyway("big.log");
     await flush();
     expect(api.viewFile).toHaveBeenLastCalledWith("C:/repo", "big.log", true);
-    expect(store.getState().viewed?.load).toEqual({ status: "ready", content: "big\n" });
+    expect(viewed(store.getState())?.load).toEqual({ status: "ready", content: "big\n" });
   });
 
   it("refresh keeps a viewed file, re-reads it, and clears it once gone", async () => {
@@ -276,11 +384,11 @@ describe("project explorer state", () => {
     await store.getState().refresh();
     await flush();
     exclusive(store.getState());
-    expect(store.getState().viewed?.path).toBe("README.md");
+    expect(viewed(store.getState())?.path).toBe("README.md");
     expect(api.viewFile).toHaveBeenCalledTimes(2);
     vi.mocked(api.listFiles).mockResolvedValueOnce(["a.ts", "b.ts"]);
     await store.getState().refresh();
-    expect(store.getState().viewed).toBeNull();
+    expect(viewed(store.getState())).toBeNull();
   });
 
   it("refresh switches a viewed file to its diff once it has changes", async () => {
@@ -292,6 +400,6 @@ describe("project explorer state", () => {
     await store.getState().refresh();
     exclusive(store.getState());
     expect(store.getState().selectedId).toBe(1);
-    expect(store.getState().viewed).toBeNull();
+    expect(viewed(store.getState())).toBeNull();
   });
 });

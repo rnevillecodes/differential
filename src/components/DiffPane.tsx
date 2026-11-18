@@ -1,6 +1,10 @@
-import { displayPath, useApp, type ViewedFile } from "../store";
+import { memo } from "react";
+import type { ChangeSet } from "../model/ChangeSet";
+import type { FileSummary } from "../model/FileSummary";
+import { changeAt, displayPath, useApp, type FileLoad, type ViewLoad, type ViewMode } from "../store";
 import { DiffView } from "./DiffView";
 import { FileView } from "./FileView";
+import { TabBar, tabId, tabPanelId } from "./TabBar";
 
 const ERROR_TITLES: Record<string, string> = {
   gitNotFound: "Git not found",
@@ -13,14 +17,10 @@ export function DiffPane() {
   const repo = useApp((s) => s.repo);
   const error = useApp((s) => s.error);
   const changes = useApp((s) => s.changes);
-  const selectedId = useApp((s) => s.selectedId);
-  const files = useApp((s) => s.files);
-  const viewMode = useApp((s) => s.viewMode);
   const loading = useApp((s) => s.loading);
   const pickAndOpen = useApp((s) => s.pickAndOpen);
-  const loadLarge = useApp((s) => s.loadLarge);
-  const viewed = useApp((s) => s.viewed);
-  const loadViewedAnyway = useApp((s) => s.loadViewedAnyway);
+  const tabs = useApp((s) => s.tabs);
+  const activePath = useApp((s) => s.activePath);
 
   if (error) {
     return (
@@ -56,26 +56,76 @@ export function DiffPane() {
     );
   }
 
-  if (viewed) return <ViewedPane viewed={viewed} onLoadAnyway={loadViewedAnyway} />;
+  return (
+    <section className="diff-pane">
+      {tabs.length > 0 && <TabBar />}
+      <div className="tab-panels">
+        {tabs.map((t) => (
+          <TabPanel key={t.path} path={t.path} active={t.path === activePath} />
+        ))}
+        {activePath === null &&
+          (changes.files.length === 0 ? (
+            <div className="message">
+              <h2>No changes</h2>
+              <p>
+                The working tree matches <code>{changes.baseRef}</code>.
+              </p>
+            </div>
+          ) : (
+            <div className="message">
+              <h2>No file open</h2>
+              <p>Pick a file from the sidebar, or press ] to open the next changed file.</p>
+            </div>
+          ))}
+      </div>
+    </section>
+  );
+}
 
-  if (changes.files.length === 0) {
-    return (
-      <section className="diff-pane">
-        <div className="message">
-          <h2>No changes</h2>
-          <p>
-            The working tree matches <code>{changes.baseRef}</code>.
-          </p>
-        </div>
-      </section>
-    );
-  }
+/**
+ * One open tab. Every tab stays mounted (inactive ones are hidden and inert) so that
+ * switching back keeps its scroll position, expanded context and highlighting.
+ */
+const TabPanel = memo(function TabPanel({ path, active }: { path: string; active: boolean }) {
+  const changes = useApp((s) => s.changes);
+  const file = changeAt(changes, path);
+  const load = useApp((s) => (file ? s.files[file.id] : undefined));
+  const view = useApp((s) => (file ? undefined : s.views[path]));
+  const viewMode = useApp((s) => s.viewMode);
+  const loadLarge = useApp((s) => s.loadLarge);
+  const loadViewAnyway = useApp((s) => s.loadViewAnyway);
 
-  const file = selectedId === null ? null : changes.files[selectedId];
-  if (!file) return <section className="diff-pane" />;
-  const load = files[file.id];
+  return (
+    <div
+      className={`tab-panel${active ? "" : " inactive"}`}
+      role="tabpanel"
+      id={tabPanelId(path)}
+      aria-labelledby={tabId(path)}
+      inert={!active}
+    >
+      {file && changes ? (
+        <ChangedFile file={file} changes={changes} load={load} mode={viewMode} onLoadLarge={loadLarge} />
+      ) : (
+        <UnchangedFile path={path} load={view} onLoadAnyway={() => loadViewAnyway(path)} />
+      )}
+    </div>
+  );
+});
+
+function ChangedFile({
+  file,
+  changes,
+  load,
+  mode,
+  onLoadLarge,
+}: {
+  file: FileSummary;
+  changes: ChangeSet;
+  load: FileLoad | undefined;
+  mode: ViewMode;
+  onLoadLarge: (id: number) => void;
+}) {
   const path = displayPath(file);
-
   let body: React.ReactNode;
   if (!load || load.status === "loading") {
     body = <div className="message">Loading…</div>;
@@ -93,7 +143,7 @@ export function DiffPane() {
         <p>
           This diff is large ({file.additions + file.deletions} changed lines) and is not shown by default.
         </p>
-        <button onClick={() => loadLarge(file.id)}>Load diff anyway</button>
+        <button onClick={() => onLoadLarge(file.id)}>Load diff anyway</button>
       </div>
     );
   } else if (load.status === "error") {
@@ -126,13 +176,13 @@ export function DiffPane() {
         diff={load.diff}
         oldContent={load.oldContent}
         newContent={load.newContent}
-        mode={viewMode}
+        mode={mode}
       />
     );
   }
 
   return (
-    <section className="diff-pane" aria-label={`Diff of ${path}`}>
+    <div className="file-pane" aria-label={`Diff of ${path}`}>
       <div className="diff-header">
         <span className={`diff-status status-${file.status}`}>{file.status}</span>
         {file.status === "renamed" && file.oldPath && (
@@ -144,7 +194,7 @@ export function DiffPane() {
         <span className="diff-path">{path}</span>
       </div>
       {body}
-    </section>
+    </div>
   );
 }
 
@@ -152,10 +202,10 @@ const formatSize = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 
 /** An unchanged file opened from the project tree. */
-function ViewedPane({ viewed, onLoadAnyway }: { viewed: ViewedFile; onLoadAnyway: () => void }) {
-  const { path, load } = viewed;
+function UnchangedFile({ path, load, onLoadAnyway }: { path: string; load: ViewLoad | undefined; onLoadAnyway: () => void }) {
   let body: React.ReactNode;
-  switch (load.status) {
+  switch (load?.status) {
+    case undefined:
     case "loading":
       body = <div className="message">Loading…</div>;
       break;
@@ -205,12 +255,12 @@ function ViewedPane({ viewed, onLoadAnyway }: { viewed: ViewedFile; onLoadAnyway
       break;
   }
   return (
-    <section className="diff-pane" aria-label={`Contents of ${path}`}>
+    <div className="file-pane" aria-label={`Contents of ${path}`}>
       <div className="diff-header">
         <span className="diff-status status-unchanged">unchanged</span>
         <span className="diff-path">{path}</span>
       </div>
       {body}
-    </section>
+    </div>
   );
 }

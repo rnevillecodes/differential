@@ -6,16 +6,27 @@ import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { createAppStore, StoreContext, type AppState } from "./store";
 
-/** Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O open, Ctrl+\ toggle view. */
+/**
+ * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O open, Ctrl+\ toggle view,
+ * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs.
+ */
 export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
   const target = e.target as HTMLElement | null;
   const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
-  if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-    const key = e.key.toLowerCase();
-    if (key === "r") void s.refresh();
-    else if (key === "o") void s.pickAndOpen();
-    else if (key === "\\") s.toggleViewMode();
-    else return false;
+  if (e.ctrlKey && !e.altKey) {
+    if (e.key === "Tab") s.cycleTab(e.shiftKey ? -1 : 1);
+    else if (e.key === "PageDown" && !e.shiftKey) s.cycleTab(1);
+    else if (e.key === "PageUp" && !e.shiftKey) s.cycleTab(-1);
+    else if (e.shiftKey) return false;
+    else {
+      const key = e.key.toLowerCase();
+      if (key === "r") void s.refresh();
+      else if (key === "o") void s.pickAndOpen();
+      else if (key === "\\") s.toggleViewMode();
+      else if (key === "w") {
+        if (s.activePath !== null) s.closeTab(s.activePath);
+      } else return false;
+    }
     return true;
   }
   if (typing || e.ctrlKey || e.altKey || e.metaKey) return false;

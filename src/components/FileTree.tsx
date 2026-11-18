@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { displayPath, useApp } from "../store";
+import { useApp } from "../store";
 import { buildTree, flatten, parentOf, type TreeRow } from "../tree/build";
 import { CollapseAllIcon } from "./icons";
 import { StatusBadge } from "./status";
@@ -15,8 +15,7 @@ export function FileTree() {
   const projectFiles = useApp((s) => s.projectFiles);
   const filesError = useApp((s) => s.filesError);
   const expanded = useApp((s) => s.expanded);
-  const selectedId = useApp((s) => s.selectedId);
-  const viewed = useApp((s) => s.viewed);
+  const selectedPath = useApp((s) => s.activePath);
   const toggleFolder = useApp((s) => s.toggleFolder);
   const setFolderExpanded = useApp((s) => s.setFolderExpanded);
   const collapseAll = useApp((s) => s.collapseAll);
@@ -29,9 +28,6 @@ export function FileTree() {
   );
   const rows = useMemo(() => (tree ? flatten(tree, expanded) : []), [tree, expanded]);
   const indexOf = useMemo(() => new Map(rows.map((r, i) => [r.node.path, i])), [rows]);
-
-  const selectedPath =
-    viewed?.path ?? (changes && selectedId !== null && changes.files[selectedId] ? displayPath(changes.files[selectedId]) : null);
 
   // Keyboard cursor; follows the selection when it changes elsewhere.
   const [active, setActive] = useState<string | null>(selectedPath);
@@ -77,10 +73,13 @@ export function FileTree() {
     );
   }
 
-  const activate = (row: TreeRow) => {
+  const activate = (row: TreeRow, pin = false) => {
     setActive(row.node.path);
-    if (row.node.type === "dir") toggleFolder(row.node.path);
-    else openTreePath(row.node.path);
+    if (row.node.type === "dir") {
+      if (!pin) toggleFolder(row.node.path);
+    } else {
+      openTreePath(row.node.path, pin);
+    }
   };
 
   const moveTo = (i: number) => {
@@ -118,8 +117,9 @@ export function FileTree() {
         break;
       }
       case "Enter":
+        // A deliberate open, so it gets a regular tab rather than the preview tab.
         if (!row) return;
-        activate(row);
+        activate(row, row.node.type === "file");
         break;
       default:
         return;
@@ -191,7 +191,7 @@ const TreeRowView = memo(function TreeRowView({
   expanded: boolean;
   selected: boolean;
   active: boolean;
-  onActivate: (row: TreeRow) => void;
+  onActivate: (row: TreeRow, pin?: boolean) => void;
 }) {
   const { node, depth } = row;
   const isDir = node.type === "dir";
@@ -206,6 +206,7 @@ const TreeRowView = memo(function TreeRowView({
       aria-expanded={isDir ? expanded : undefined}
       style={{ transform: `translateY(${top}px)`, paddingLeft: 8 + depth * INDENT }}
       onClick={() => onActivate(row)}
+      onDoubleClick={() => onActivate(row, true)}
       title={node.path}
       data-testid="tree-row"
     >

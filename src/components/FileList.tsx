@@ -70,7 +70,7 @@ const FileRow = memo(function FileRow({
   file: FileSummary;
   selected: boolean;
   top: number;
-  onSelect: (id: number) => void;
+  onSelect: (id: number, pin?: boolean) => void;
 }) {
   const path = displayPath(file);
   const [dir, name] = splitPath(path);
@@ -83,6 +83,7 @@ const FileRow = memo(function FileRow({
       aria-selected={selected}
       style={{ transform: `translateY(${top}px)` }}
       onClick={() => onSelect(file.id)}
+      onDoubleClick={() => onSelect(file.id, true)}
       title={title}
       data-testid="file-row"
     >

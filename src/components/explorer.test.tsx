@@ -80,9 +80,9 @@ describe("project tree", () => {
     expect(within(row("b.tsx")).getByLabelText("untracked")).toBeInTheDocument();
     fireEvent.click(row("b.tsx"));
     expect(store.getState().selectedId).toBe(1);
-    expect(store.getState().viewed).toBeNull();
+    expect(store.getState().activePath).toBe("src/ui/b.tsx");
     fireEvent.click(row("src"));
-    expect(screen.queryByText("a.ts")).toBeNull();
+    expect(within(screen.getByRole("tree")).queryByText("a.ts")).toBeNull();
   });
 
   it("supports keyboard navigation", async () => {
@@ -143,6 +143,69 @@ describe("project tree", () => {
     for (const word of ["Delete", "Rename", "New", "Stage", "Commit", "Discard", "Revert", "Save"]) {
       expect(labels.some((l) => l.includes(word))).toBe(false);
     }
+  });
+});
+
+describe("editor tabs", () => {
+  const tabNames = () => screen.getAllByTestId("editor-tab").map((t) => t.querySelector(".editor-tab-name")!.textContent);
+
+  it("keeps several files open and switches between them", async () => {
+    const { store } = await renderApp();
+    fireEvent.doubleClick(row("a.ts"));
+    fireEvent.click(row("README.md"));
+    await act(flush);
+    expect(tabNames()).toEqual(["a.ts", "README.md"]);
+    expect(screen.getByRole("tab", { name: "README.md" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "README.md" }).parentElement).toHaveClass("preview");
+    // Both panels stay mounted; only the active one is interactive.
+    const diff = screen.getByLabelText("Diff of src/a.ts");
+    expect(diff.closest("[role=tabpanel]")).toHaveAttribute("inert");
+    fireEvent.click(screen.getByRole("tab", { name: /a\.ts/ }));
+    expect(store.getState().selectedId).toBe(0);
+    expect(screen.getByLabelText("Diff of src/a.ts")).toBe(diff);
+    expect(diff.closest("[role=tabpanel]")).not.toHaveAttribute("inert");
+  });
+
+  it("closes tabs with the close button, middle-click and Ctrl+W", async () => {
+    const { store } = await renderApp();
+    fireEvent.doubleClick(row("a.ts"));
+    fireEvent.doubleClick(row("README.md"));
+    fireEvent.doubleClick(row("big.log"));
+    await act(flush);
+    fireEvent.click(screen.getByRole("button", { name: "Close README.md" }));
+    expect(tabNames()).toEqual(["a.ts", "big.log"]);
+    fireEvent(screen.getAllByTestId("editor-tab")[0], new MouseEvent("auxclick", { bubbles: true, button: 1 }));
+    expect(tabNames()).toEqual(["big.log"]);
+    fireEvent.keyDown(window, { key: "w", ctrlKey: true });
+    expect(screen.queryAllByTestId("editor-tab")).toHaveLength(0);
+    expect(store.getState().activePath).toBeNull();
+    expect(screen.getByText("No file open")).toBeInTheDocument();
+  });
+
+  it("moves between tabs with the keyboard", async () => {
+    const { store } = await renderApp();
+    fireEvent.doubleClick(row("a.ts"));
+    fireEvent.doubleClick(row("README.md"));
+    await act(flush);
+    fireEvent.keyDown(screen.getByRole("tab", { name: "README.md" }), { key: "ArrowLeft" });
+    expect(store.getState().activePath).toBe("src/a.ts");
+    expect(screen.getByRole("tab", { name: /a\.ts/ })).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Tab", ctrlKey: true });
+    expect(store.getState().activePath).toBe("README.md");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "README.md" }), { key: "Delete" });
+    expect(tabNames()).toEqual(["a.ts"]);
+  });
+
+  it("shows the folder for tabs with the same name", async () => {
+    const { store } = await renderApp(explorerApi({ listFiles: vi.fn(async () => [...PROJECT, "lib/a.ts"]) }));
+    act(() => {
+      store.getState().select(0, true);
+      store.getState().openTreePath("lib/a.ts", true);
+      store.getState().openTreePath("README.md", true);
+    });
+    await act(flush);
+    const dirs = screen.getAllByTestId("editor-tab").map((t) => t.querySelector(".editor-tab-dir")?.textContent ?? "");
+    expect(dirs).toEqual(["src", "lib", ""]);
   });
 });
 
