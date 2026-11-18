@@ -138,15 +138,149 @@ button:focus-visible {
   background: var(--panel);
   min-width: 0;
 }
-.toolbar .repo-path {
+/* ---- repository picker ---- */
+
+.repo-picker {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+.repo-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fg);
+}
+.repo-trigger:hover,
+.repo-trigger[aria-expanded="true"] {
+  background: var(--hover);
+  border-color: var(--border);
+}
+.repo-trigger svg {
+  flex: none;
+  color: var(--muted);
+}
+.repo-path {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex: 1 1 auto;
+  direction: rtl;
+  text-align: left;
+}
+.repo-path bdi {
+  direction: ltr;
+}
+.repo-path.placeholder {
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
+.repo-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: min(560px, calc(100vw - 20px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.repo-search {
+  margin: 8px;
+  font-size: 13px;
+}
+.repo-options {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.repo-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.repo-option.active {
+  background: var(--selected);
+}
+.repo-option-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.repo-option-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-option-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-option-browse {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  color: var(--fg);
+}
+.repo-option-browse .repo-option-name {
+  font-weight: normal;
+}
+.repo-option-browse svg {
+  color: var(--muted);
+}
+.repo-current {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+.repo-remove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  visibility: hidden;
+}
+.repo-option.active .repo-remove,
+.repo-option:hover .repo-remove {
+  visibility: visible;
+}
+.repo-remove:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.repo-empty {
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .toolbar form {
   display: flex;

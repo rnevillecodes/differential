@@ -73,6 +73,11 @@ export interface AppState {
   /** Contents of open unchanged files, by path. */
   views: Record<string, ViewLoad>;
 
+  /** Repository roots opened before, most recent first. */
+  recentRepos: string[];
+  /** Whether the repository picker dropdown is open. */
+  repoPickerOpen: boolean;
+
   init(): Promise<void>;
   openPath(path: string, base?: string): Promise<void>;
   pickAndOpen(): Promise<void>;
@@ -104,6 +109,10 @@ export interface AppState {
   cycleTab(delta: number): void;
   /** Load an unchanged file even though it is large. */
   loadViewAnyway(path: string): void;
+
+  setRepoPickerOpen(open: boolean): void;
+  /** Forget a repository in the recent list. */
+  removeRecentRepo(root: string): void;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -131,6 +140,21 @@ export const browserStorage: KeyValue = {
 
 const VIEW_MODE_KEY = "differential.viewMode";
 const SIDEBAR_TAB_KEY = "differential.sidebarTab";
+const RECENT_REPOS_KEY = "differential.recentRepos";
+const MAX_RECENT_REPOS = 20;
+
+function readRecent(storage: KeyValue): string[] {
+  try {
+    const parsed: unknown = JSON.parse(storage.get(RECENT_REPOS_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Compare repository roots the way Windows does: separators and case don't matter. */
+export const sameRoot = (a: string, b: string) =>
+  a.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === b.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
 export const displayPath = (f: FileSummary): string => f.newPath ?? f.oldPath ?? "";
 
@@ -380,6 +404,11 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       removeTabs((t) => !listed.has(t.path) && !changeAt(changes, t.path));
     };
 
+    const setRecent = (recentRepos: string[]) => {
+      storage.set(RECENT_REPOS_KEY, JSON.stringify(recentRepos));
+      set({ recentRepos });
+    };
+
     const move = (delta: number) => {
       const { changes, selectedId } = get();
       if (!changes || changes.files.length === 0) return;
@@ -408,6 +437,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       tabs: [],
       activePath: null,
       views: {},
+      recentRepos: readRecent(storage),
+      repoPickerOpen: false,
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -445,6 +476,9 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
           return;
         }
         set({ repo, changes: null, selectedId: null, files: {} });
+        setRecent(
+          [repo.root, ...get().recentRepos.filter((r) => !sameRoot(r, repo.root))].slice(0, MAX_RECENT_REPOS),
+        );
         await loadChanges(repo.root, base?.trim() || "HEAD", false);
       },
 
@@ -544,6 +578,14 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
 
       loadViewAnyway(path) {
         if (get().tabs.some((t) => t.path === path)) loadView(path, true);
+      },
+
+      setRepoPickerOpen(open) {
+        set({ repoPickerOpen: open });
+      },
+
+      removeRecentRepo(root) {
+        setRecent(get().recentRepos.filter((r) => r !== root));
       },
     };
   });

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useApp } from "../store";
+import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
   const repo = useApp((s) => s.repo);
@@ -7,7 +8,6 @@ export function Toolbar() {
   const baseError = useApp((s) => s.baseError);
   const loading = useApp((s) => s.loading);
   const viewMode = useApp((s) => s.viewMode);
-  const pickAndOpen = useApp((s) => s.pickAndOpen);
   const setBase = useApp((s) => s.setBase);
   const refresh = useApp((s) => s.refresh);
   const setViewMode = useApp((s) => s.setViewMode);
@@ -23,12 +23,7 @@ export function Toolbar() {
 
   return (
     <header className="toolbar">
-      <button onClick={() => void pickAndOpen()} title="Open repository (Ctrl+O)">
-        Open…
-      </button>
-      <span className="repo-path" title={repo?.root}>
-        {repo ? repo.root : "No repository"}
-      </span>
+      <RepoPicker />
 
       <form onSubmit={submit}>
         <label htmlFor="base-input">Base</label>

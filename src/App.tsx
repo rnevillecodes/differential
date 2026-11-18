@@ -7,7 +7,7 @@ import { Toolbar } from "./components/Toolbar";
 import { createAppStore, StoreContext, type AppState } from "./store";
 
 /**
- * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O open, Ctrl+\ toggle view,
+ * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O repository picker, Ctrl+\ toggle view,
  * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs.
  */
 export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
@@ -21,7 +21,7 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
     else {
       const key = e.key.toLowerCase();
       if (key === "r") void s.refresh();
-      else if (key === "o") void s.pickAndOpen();
+      else if (key === "o") s.setRepoPickerOpen(!s.repoPickerOpen);
       else if (key === "\\") s.toggleViewMode();
       else if (key === "w") {
         if (s.activePath !== null) s.closeTab(s.activePath);

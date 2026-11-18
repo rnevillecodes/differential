@@ -252,6 +252,43 @@ describe("tabs", () => {
   });
 });
 
+describe("recent repositories", () => {
+  it("records opened repositories most recent first, without duplicates, and persists them", async () => {
+    const storage = memoryStorage();
+    const store = createAppStore(fakeApi(), storage);
+    await store.getState().openPath("C:/one");
+    await store.getState().openPath("C:/two");
+    await store.getState().openPath("c:\\ONE\\");
+    expect(store.getState().recentRepos).toEqual(["c:\\ONE\\", "C:/two"]);
+    expect(createAppStore(fakeApi(), storage).getState().recentRepos).toEqual(["c:\\ONE\\", "C:/two"]);
+  });
+
+  it("does not record a folder that failed to open", async () => {
+    const api = fakeApi({ openRepo: vi.fn(async () => Promise.reject({ kind: "notARepo", message: "no" })) });
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/x");
+    expect(store.getState().recentRepos).toEqual([]);
+  });
+
+  it("caps the list and lets entries be removed", async () => {
+    const storage = memoryStorage({
+      "differential.recentRepos": JSON.stringify(Array.from({ length: 20 }, (_, i) => `C:/r${i}`)),
+    });
+    const store = createAppStore(fakeApi(), storage);
+    await store.getState().openPath("C:/new");
+    expect(store.getState().recentRepos).toHaveLength(20);
+    expect(store.getState().recentRepos[0]).toBe("C:/new");
+    expect(store.getState().recentRepos).not.toContain("C:/r19");
+    store.getState().removeRecentRepo("C:/r0");
+    expect(JSON.parse(storage.data["differential.recentRepos"])).not.toContain("C:/r0");
+  });
+
+  it("ignores a corrupt stored list", () => {
+    const store = createAppStore(fakeApi(), memoryStorage({ "differential.recentRepos": "{nope" }));
+    expect(store.getState().recentRepos).toEqual([]);
+  });
+});
+
 /** The unchanged file shown in the main pane, if any. */
 const viewed = (s: AppState) =>
   s.activePath !== null && s.selectedId === null ? { path: s.activePath, load: s.views[s.activePath] } : null;

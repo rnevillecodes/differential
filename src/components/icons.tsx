@@ -41,6 +41,24 @@ export function FilesIcon(props: IconProps) {
   );
 }
 
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Icon width={12} height={12} {...props}>
+      <path d="M4 6l4 4 4-4" />
+    </Icon>
+  );
+}
+
+/** An open folder. */
+export function FolderOpenIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M1.75 12.75V3.25H6.5L8 4.75h5.25v2.5" />
+      <path d="M1.75 12.75l2-5.5h10.5l-2 5.5z" />
+    </Icon>
+  );
+}
+
 /** Stacked chevrons pointing inward: collapse all. */
 export function CollapseAllIcon(props: IconProps) {
   return (
