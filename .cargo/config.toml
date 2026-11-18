@@ -1,0 +1,5 @@
+[env]
+# Same as src-tauri/.cargo/config.toml, for cargo invoked from the repo root
+# (e.g. `npm run test:rust`, which uses --manifest-path): cargo reads config from the
+# current directory, not the manifest's, so without this ts-rs would write to ./bindings.
+TS_RS_EXPORT_DIR = { value = "src/model", relative = true }
