@@ -79,6 +79,8 @@ export interface AppState {
   setSidebarTab(tab: SidebarTab): void;
   toggleFolder(path: string): void;
   setFolderExpanded(path: string, open: boolean): void;
+  /** Collapse every folder in the project tree. */
+  collapseAll(): void;
   /** Expand every folder containing `path`. */
   reveal(path: string): void;
   /** Open a file from the project tree: its diff if changed, else its contents. */
@@ -404,6 +406,10 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         if (open) next.add(path);
         else next.delete(path);
         set({ expanded: next });
+      },
+
+      collapseAll() {
+        if (get().expanded.size > 0) set({ expanded: new Set() });
       },
 
       reveal(path) {

@@ -119,6 +119,24 @@ describe("project tree", () => {
     expect(row("b.tsx")).toHaveAttribute("aria-selected", "true");
   });
 
+  it("collapses every folder from the root header", async () => {
+    await renderApp();
+    fireEvent.click(row("ui"));
+    expect(row("ui")).toHaveAttribute("aria-expanded", "true");
+    const button = screen.getByRole("button", { name: "Collapse all folders" });
+    fireEvent.click(button);
+    expect(treeRows().map((r) => r.querySelector(".tree-name")!.textContent)).toEqual([
+      "assets",
+      "src",
+      "big.log",
+      "README.md",
+    ]);
+    expect(button).toBeDisabled();
+    // Re-expanding a folder shows its children collapsed too.
+    fireEvent.click(row("src"));
+    expect(row("ui")).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("offers no controls that modify files", async () => {
     await renderApp();
     const labels = screen.getAllByRole("button").map((b) => b.textContent ?? "");

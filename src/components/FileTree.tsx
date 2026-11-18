@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { displayPath, useApp } from "../store";
 import { buildTree, flatten, parentOf, type TreeRow } from "../tree/build";
+import { CollapseAllIcon } from "./icons";
 import { StatusBadge } from "./status";
 
 const ROW_HEIGHT = 28;
@@ -18,6 +19,7 @@ export function FileTree() {
   const viewed = useApp((s) => s.viewed);
   const toggleFolder = useApp((s) => s.toggleFolder);
   const setFolderExpanded = useApp((s) => s.setFolderExpanded);
+  const collapseAll = useApp((s) => s.collapseAll);
   const reveal = useApp((s) => s.reveal);
   const openTreePath = useApp((s) => s.openTreePath);
 
@@ -127,6 +129,21 @@ export function FileTree() {
 
   return (
     <nav className="file-tree" aria-label="Project files">
+      <div className="file-list-header tree-header">
+        <span className="tree-root-name" title={repo.root}>
+          {repoName(repo.root)}
+        </span>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={collapseAll}
+          disabled={expanded.size === 0}
+          title="Collapse all folders"
+          aria-label="Collapse all folders"
+        >
+          <CollapseAllIcon />
+        </button>
+      </div>
       <div
         className="file-list-scroll"
         ref={scrollRef}
@@ -156,6 +173,8 @@ export function FileTree() {
     </nav>
   );
 }
+
+const repoName = (repo: string) => repo.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || repo;
 
 const treeItemId = (path: string) => `tree-${encodeURIComponent(path)}`;
 

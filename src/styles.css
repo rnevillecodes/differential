@@ -203,6 +203,10 @@ button:focus-visible {
   background: transparent;
   color: var(--muted);
   padding: 6px 10px 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .sidebar-tabs [role="tab"]:hover {
   background: var(--hover);
@@ -338,6 +342,43 @@ button:focus-visible {
   line-height: 14px;
   flex: none;
 }
+.tree-header {
+  align-items: center;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.tree-root-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--fg);
+}
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .tree-message {
   padding: 12px 10px;
   color: var(--muted);

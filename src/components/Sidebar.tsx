@@ -1,10 +1,11 @@
 import { useApp, type SidebarTab } from "../store";
 import { FileList } from "./FileList";
 import { FileTree } from "./FileTree";
+import { ChangesIcon, FilesIcon } from "./icons";
 
-const TABS: { id: SidebarTab; label: string }[] = [
-  { id: "changes", label: "Changes" },
-  { id: "files", label: "Files" },
+const TABS: { id: SidebarTab; label: string; Icon: typeof ChangesIcon }[] = [
+  { id: "changes", label: "Changes", Icon: ChangesIcon },
+  { id: "files", label: "Files", Icon: FilesIcon },
 ];
 
 export function Sidebar() {
@@ -22,7 +23,8 @@ export function Sidebar() {
             aria-controls={`panel-${t.id}`}
             onClick={() => setTab(t.id)}
           >
-            {t.label}
+            <t.Icon />
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
