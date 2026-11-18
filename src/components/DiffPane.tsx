@@ -134,14 +134,14 @@ export function DiffPane() {
   return (
     <section className="diff-pane" aria-label={`Diff of ${path}`}>
       <div className="diff-header">
-        <span className={`status status-${file.status}`}>{file.status}</span>
+        <span className={`diff-status status-${file.status}`}>{file.status}</span>
         {file.status === "renamed" && file.oldPath && (
           <>
-            <span className="old-path">{file.oldPath}</span>
+            <span className="diff-path old-path">{file.oldPath}</span>
             <span>→</span>
           </>
         )}
-        <span>{path}</span>
+        <span className="diff-path">{path}</span>
       </div>
       {body}
     </section>
@@ -207,8 +207,8 @@ function ViewedPane({ viewed, onLoadAnyway }: { viewed: ViewedFile; onLoadAnyway
   return (
     <section className="diff-pane" aria-label={`Contents of ${path}`}>
       <div className="diff-header">
-        <span className="status-unchanged">unchanged</span>
-        <span>{path}</span>
+        <span className="diff-status status-unchanged">unchanged</span>
+        <span className="diff-path">{path}</span>
       </div>
       {body}
     </section>

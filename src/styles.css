@@ -414,8 +414,17 @@ button:focus-visible {
   white-space: nowrap;
   overflow: hidden;
 }
+.diff-header .diff-status {
+  flex: none;
+  font-weight: 700;
+}
 .diff-header .status-unchanged {
   color: var(--muted);
+}
+.diff-header .diff-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .diff-header .old-path {
   color: var(--muted);
