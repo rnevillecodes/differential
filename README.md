@@ -22,7 +22,7 @@ npm install
 differential [path] [--base <rev>]
 ```
 
-- `path` — any folder inside a git repository (resolved to the repository root). Without it, differential starts on an "Open a repository" screen (or press `Ctrl+O`).
+- `path` — any folder inside a git repository (resolved to the repository root). Without it, differential starts on an "Open a repository" screen.
 - `--base <rev>` — any revision git understands: branch, tag, SHA, `HEAD~3`, … Defaults to `HEAD`. The base can also be changed in the toolbar (see [Comparing against a branch](#comparing-against-a-branch)).
 
 Examples (after `npm run tauri build`):
@@ -31,6 +31,12 @@ Examples (after `npm run tauri build`):
 src-tauri/target/release/differential C:/code/my-project
 src-tauri/target/release/differential C:/code/my-project --base main
 ```
+
+The window opens maximised.
+
+### Switching repositories
+
+The toolbar shows the open repository's path. Click it (or press `Ctrl+O`) for a searchable list of recently opened repositories: type to filter, pick one to open it, or type a folder path and press `Enter` to open that. **Browse for a folder…** picks a folder with the system dialog, and the × on a row removes it from the list. The list is remembered across restarts.
 
 ### Comparing against a branch
 
@@ -42,19 +48,28 @@ Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and
 
 | Key | Action |
 | --- | --- |
-| `]` / `[` | Next / previous file |
-| `Ctrl+R` | Refresh the diff |
-| `Ctrl+O` | Open a repository |
+| `]` / `[` | Next / previous changed file |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab (also `Ctrl+PageDown` / `Ctrl+PageUp`) |
+| `Ctrl+W` | Close the current tab |
+| `Ctrl+B` | Show / hide the sidebar |
+| `Ctrl+R` | Refresh the diff, file tree, and branch list |
+| `Ctrl+O` | Switch repository (recent repositories) |
 | `Ctrl+\` | Toggle unified / side-by-side view |
 
 The view mode is remembered across files and restarts. Shift+mouse wheel scrolls the pane under the pointer horizontally in side-by-side view.
 
+### Tabs
+
+Files open in tabs above the diff, so several can be open at once. A single click in the sidebar opens a file in the *preview* tab (shown in italics), which the next single click replaces; double-click a file (or press `Enter` in the Files tree) to open it in a tab that stays. Double-clicking the preview tab keeps it too.
+
+Close a tab with its ×, a middle-click, or `Ctrl+W`. With a tab focused, `←` / `→` and `Home` / `End` move between tabs and `Delete` closes one. Tabs for files that no longer exist are closed on refresh.
+
 ### Sidebar
 
-The sidebar has two tabs, and the last one used is remembered:
+The sidebar can be hidden with the button at the left of the toolbar or `Ctrl+B`; whether it is shown is remembered. It has two tabs, and the last one used is remembered:
 
 - **Changes**: the changed files, with status and `+/-` line counts.
-- **Files**: the whole project as a folder tree (tracked files plus untracked files that are not ignored, and files deleted since the base). Changed files show their status letter; folders show how many changed files they contain. Selecting a changed file shows its diff; selecting an unchanged file shows its contents read-only. The tree updates when you refresh.
+- **Files**: the whole project as a folder tree (tracked files plus untracked files that are not ignored, and files deleted since the base). Changed files show their status letter; folders show how many changed files they contain. Selecting a changed file shows its diff; selecting an unchanged file shows its contents read-only. The tree updates when you refresh. The button beside the repository name collapses every folder.
 
 In the Files tree:
 
@@ -63,7 +78,7 @@ In the Files tree:
 | `↑` / `↓` | Move between rows |
 | `→` | Expand a folder, or move into an expanded one |
 | `←` | Collapse a folder, or move to the parent folder |
-| `Enter` | Open a file, or toggle a folder |
+| `Enter` | Open a file in a tab that stays, or toggle a folder |
 
 ## Development
 
@@ -81,7 +96,7 @@ In the Files tree:
 ### Layout
 
 ```
-src-tauri/src/git/      git process runner, repository and base resolution
+src-tauri/src/git/      git process runner, repository and base resolution, branch and tag listing
 src-tauri/src/diff/     diff model, unified-diff parser, intraline ranges
 src-tauri/src/changes.rs  file list, per-file diffs, file content
 src-tauri/src/files.rs  project file listing and read-only file view
@@ -92,7 +107,7 @@ src/api/                typed wrappers around the Tauri commands
 src/rows/               diff model → flat rows for the virtualized views
 src/highlight/          Shiki syntax highlighting in a Web Worker
 src/tree/               project files → folder tree → visible rows
-src/components/         toolbar, sidebar (file list, project tree), diff and file views
+src/components/         toolbar (repo and base pickers), sidebar (file list, project tree), tabs, diff and file views
 ```
 
 Design and requirements live in [`openspec/`](openspec/).
