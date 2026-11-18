@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- differential app icon, concept C "Overlap": old (red, minus) and new (green, plus) versions overlapping. -->
+  <rect width="1024" height="1024" rx="230" fill="#FAFAF9"/>
+  <rect x="176" y="176" width="464" height="464" rx="96" fill="#E5484D"/>
+  <rect x="384" y="384" width="464" height="464" rx="96" fill="#2FBF7A"/>
+  <path d="M480 384 H640 V544 A96 96 0 0 1 544 640 H384 V480 A96 96 0 0 1 480 384 Z" fill="#18181B"/>
+  <rect x="216" y="258" width="128" height="48" rx="24" fill="#FFFFFF"/>
+  <rect x="680" y="718" width="128" height="48" rx="24" fill="#FFFFFF"/>
+  <rect x="720" y="678" width="48" height="128" rx="24" fill="#FFFFFF"/>
+</svg>

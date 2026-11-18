@@ -4,6 +4,7 @@ import type { FileSummary } from "../model/FileSummary";
 import { changeAt, displayPath, useApp, type FileLoad, type ViewLoad, type ViewMode } from "../store";
 import { DiffView } from "./DiffView";
 import { FileView } from "./FileView";
+import { LogoMark } from "./icons";
 import { TabBar, tabId, tabPanelId } from "./TabBar";
 
 const ERROR_TITLES: Record<string, string> = {
@@ -40,6 +41,7 @@ export function DiffPane() {
     return (
       <section className="diff-pane">
         <div className="message">
+          <LogoMark size={72} className="start-logo" />
           <h2>Open a repository</h2>
           <p>Pick a folder inside a git repository to review its changes.</p>
           <button onClick={() => void pickAndOpen()}>Open…</button>

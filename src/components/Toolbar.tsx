@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useApp } from "../store";
+import { LogoMark } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
@@ -23,6 +24,7 @@ export function Toolbar() {
 
   return (
     <header className="toolbar">
+      <LogoMark className="toolbar-logo" title="differential" />
       <RepoPicker />
 
       <form onSubmit={submit}>

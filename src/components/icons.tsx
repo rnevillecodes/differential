@@ -22,6 +22,33 @@ function Icon({ children, ...props }: IconProps) {
   );
 }
 
+/**
+ * The differential mark: the app icon's overlapping old (red, −) and new (green, +)
+ * squares, without the icon's light tile so it sits on either theme.
+ * Source: src-tauri/icons/app-icon.svg.
+ */
+export function LogoMark({ size = 18, title, ...props }: IconProps & { size?: number; title?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="176 176 672 672"
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      aria-label={title}
+      focusable="false"
+      {...props}
+    >
+      <rect x="176" y="176" width="464" height="464" rx="96" fill="#E5484D" />
+      <rect x="384" y="384" width="464" height="464" rx="96" fill="#2FBF7A" />
+      <path d="M480 384 H640 V544 A96 96 0 0 1 544 640 H384 V480 A96 96 0 0 1 480 384 Z" fill="#18181B" />
+      <rect x="216" y="258" width="128" height="48" rx="24" fill="#FFFFFF" />
+      <rect x="680" y="718" width="128" height="48" rx="24" fill="#FFFFFF" />
+      <rect x="720" y="678" width="48" height="128" rx="24" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
 /** A diff: plus over minus inside a page. */
 export function ChangesIcon(props: IconProps) {
   return (
