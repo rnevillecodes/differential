@@ -15,10 +15,10 @@
 
 ## 3. Backend: Tauri commands and lifecycle
 
-- [ ] 3.1 Add `terminal_spawn` (with `on_data: Channel` sending raw bytes and `on_exit: Channel` sending `{ code }`), `terminal_write`, `terminal_resize`, `terminal_close` to `commands.rs`; `.manage(TerminalManager)` and register them in `lib.rs::configure`; verify `src-tauri/tests/ipc.rs` gains tests that invoke `terminal_resize`/`terminal_close` on an unknown id (no-op) and `terminal_spawn` with a bad `cwd` (error payload)
+- [x] 3.1 Add `terminal_spawn` (with `on_data: Channel` sending raw bytes and `on_exit: Channel` sending `{ code }`), `terminal_write`, `terminal_resize`, `terminal_close` to `commands.rs`; `.manage(TerminalManager)` and register them in `lib.rs::configure`; verify `src-tauri/tests/ipc.rs` gains tests that invoke `terminal_resize`/`terminal_close` on an unknown id (no-op) and `terminal_spawn` with a bad `cwd` (error payload)
 - [ ] 3.2 Call `TerminalManager::close_all()` on `RunEvent::Exit` in `run()`; verify manually: start `ping -t localhost` (Windows) / `sleep 1000` (Unix) in a terminal, quit the app, and confirm no shell or child process remains in the task manager / `ps`
-- [ ] 3.3 Update `capabilities/default.json` description to state the webview can start terminal sessions via the app's own commands (no plugin permissions added); verify `npm run tauri build` (or `cargo build`) still accepts the capability file
-- [ ] 3.4 Run `npm run test:rust` and verify all Rust tests pass on this machine (Windows)
+- [x] 3.3 Update `capabilities/default.json` description to state the webview can start terminal sessions via the app's own commands (no plugin permissions added); verify `npm run tauri build` (or `cargo build`) still accepts the capability file
+- [x] 3.4 Run `npm run test:rust` and verify all Rust tests pass on this machine (Windows)
 
 ## 4. Frontend: API and store
 

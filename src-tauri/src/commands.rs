@@ -3,8 +3,10 @@
 //! Every handler runs its git work on a blocking thread so the UI stays responsive.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Serialize;
+use tauri::ipc::{Channel, InvokeResponseBody};
 use ts_rs::TS;
 
 use crate::changes;
@@ -12,6 +14,7 @@ use crate::diff::model::{ChangeSet, FileDiff, FileSummary, Side};
 use crate::error::{AppError, Result};
 use crate::files::{self, FileView};
 use crate::git::{self, Git, RefInfo, RepoInfo};
+use crate::terminal::{TerminalExit, TerminalManager};
 
 /// Repository and base given on the command line: `differential [path] [--base <rev>]`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
@@ -105,6 +108,62 @@ pub async fn list_refs(root: String) -> Result<Vec<RefInfo>> {
 #[tauri::command]
 pub async fn view_file(root: String, path: String, force: bool) -> Result<FileView> {
     blocking(move || files::view_file(Path::new(&root), &path, force)).await
+}
+
+/// The shared terminal session registry, as held in managed state.
+pub type Terminals = Arc<TerminalManager>;
+
+/// Start the user's shell in `cwd` in a new pseudo-terminal. Output is streamed as raw bytes on
+/// `on_data`; `on_exit` receives one message after the last output. Returns the session id.
+#[tauri::command]
+pub async fn terminal_spawn(
+    terminals: tauri::State<'_, Terminals>,
+    cwd: String,
+    cols: u16,
+    rows: u16,
+    on_data: Channel<InvokeResponseBody>,
+    on_exit: Channel<TerminalExit>,
+) -> Result<u32> {
+    let terminals = terminals.inner().clone();
+    blocking(move || {
+        terminals.spawn(
+            Path::new(&cwd),
+            cols,
+            rows,
+            Box::new(move |chunk| {
+                let _ = on_data.send(InvokeResponseBody::Raw(chunk));
+            }),
+            Box::new(move |exit| {
+                let _ = on_exit.send(exit);
+            }),
+        )
+    })
+    .await
+}
+
+/// Send keyboard input to a terminal session. Unknown ids are ignored.
+#[tauri::command]
+pub async fn terminal_write(terminals: tauri::State<'_, Terminals>, id: u32, data: String) -> Result<()> {
+    let terminals = terminals.inner().clone();
+    blocking(move || terminals.write(id, data.as_bytes())).await
+}
+
+/// Resize a terminal session's pseudo-terminal. Unknown ids are ignored.
+#[tauri::command]
+pub async fn terminal_resize(terminals: tauri::State<'_, Terminals>, id: u32, cols: u16, rows: u16) -> Result<()> {
+    let terminals = terminals.inner().clone();
+    blocking(move || terminals.resize(id, cols, rows)).await
+}
+
+/// End a terminal session's shell and its programs. Unknown ids are ignored.
+#[tauri::command]
+pub async fn terminal_close(terminals: tauri::State<'_, Terminals>, id: u32) -> Result<()> {
+    let terminals = terminals.inner().clone();
+    blocking(move || {
+        terminals.close(id);
+        Ok(())
+    })
+    .await
 }
 
 #[cfg(test)]
