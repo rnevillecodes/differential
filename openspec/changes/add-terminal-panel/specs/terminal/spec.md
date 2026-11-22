@@ -39,6 +39,21 @@ The panel's visibility and its height SHALL persist across application restarts.
 - **WHEN** the user drags the panel edge far toward the top of the window
 - **THEN** the panel stops growing while a minimum height of the file pane remains visible
 
+### Requirement: Maximize the terminal panel
+The user SHALL be able to maximize the terminal panel from its header so that it fills the area of the file pane, hiding the file pane, and restore it to its previous height. While maximized the panel SHALL NOT be resizable by dragging. Hiding and showing the panel SHALL keep it maximized.
+
+#### Scenario: Maximize
+- **WHEN** the panel is open at 260px and the user activates the maximize control
+- **THEN** the terminal fills the space below the toolbar beside the sidebar, the file pane is hidden, and the terminal is resized to the new area
+
+#### Scenario: Restore
+- **WHEN** the panel is maximized and the user activates the restore control
+- **THEN** the file pane is shown again and the panel returns to 260px
+
+#### Scenario: Hidden while maximized
+- **WHEN** the panel is maximized and the user hides it
+- **THEN** the file pane is shown at full height, and showing the panel again shows it maximized
+
 ### Requirement: Interactive shell session
 Each terminal SHALL run the user's default shell attached to a pseudo-terminal, so interactive and full-screen programs work, colors and cursor control are rendered, and control keys such as `Ctrl+C` reach the running program.
 
@@ -97,12 +112,16 @@ Closing a terminal tab SHALL end its shell and every program the shell started i
 - **WHEN** the panel has one terminal and the user closes it
 - **THEN** the panel is hidden
 
-### Requirement: Shell exit keeps the tab
-When a terminal's shell exits on its own, the tab SHALL stay open showing its final output and a message with the exit code, and SHALL accept no further input until closed.
+### Requirement: Shell exit closes the tab
+When a terminal's shell exits on its own, whatever its exit code, its tab SHALL close as if the user had closed it, including hiding the panel when it was the last terminal.
 
 #### Scenario: User types exit
-- **WHEN** the user types `exit` in a terminal
-- **THEN** the terminal shows that the process exited with code 0 and the tab is marked as exited
+- **WHEN** two terminals are open and the user types `exit` in one of them
+- **THEN** that terminal's tab closes and the other terminal becomes active
+
+#### Scenario: Last shell exits
+- **WHEN** the only terminal's shell exits
+- **THEN** its tab closes and the panel is hidden
 
 ### Requirement: Shell start failure is reported
 If a terminal's shell cannot be started, the terminal tab SHALL show an error describing the failure instead of a prompt.

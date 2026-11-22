@@ -28,15 +28,21 @@
 
 ## 5. Frontend: panel UI, keyboard, theme
 
-- [ ] 5.1 Add `TerminalPanel` (tab strip with titles and exited/failed markers, "+" and hide buttons, close × and middle-click on tabs, one mounted container per terminal with inactive ones hidden) and render it in `App.tsx` under `DiffPane` with a drag handle clamped to `[120px, container − 160px]`; add styles in `styles.css`; verify component tests (mocked xterm) for showing/hiding, creating, switching, and closing tabs, and manually that dragging resizes and the height survives a restart
+- [ ] 5.1 Add `TerminalPanel` (tab strip with titles and failed markers, "+" and hide buttons, close × and middle-click on tabs, one mounted container per terminal with inactive ones hidden) and render it in `App.tsx` under `DiffPane` with a drag handle clamped to `[120px, container − 160px]`; add styles in `styles.css`; verify component tests (mocked xterm) for showing/hiding, creating, switching, and closing tabs, and manually that dragging resizes and the height survives a restart
 - [ ] 5.2 Fit on panel/window resize via `ResizeObserver` (rAF-debounced, skipped at zero size) and forward cols/rows to `terminalResize`; verify manually that `vim` or `less` redraws correctly after resizing the window and the panel
 - [x] 5.3 Add the toolbar terminal toggle (`aria-pressed`, disabled without a repo, title with `` Ctrl+` ``); verify a component test for its disabled and pressed states
 - [x] 5.4 Update `handleShortcut`: handle `ctrlKey && code === "Backquote"` everywhere; when the target is inside `[data-terminal]`, handle nothing else; in xterm's custom key handler swallow `` Ctrl+` `` and implement `Ctrl+Shift+C`/`Ctrl+Shift+V`, plus a Copy/Paste context menu; verify tests in the existing shortcut tests that `Ctrl+R`, `Ctrl+W`, `Ctrl+B`, `]` inside a terminal return `false` and do not call store actions, while `` Ctrl+` `` toggles the panel from both inside and outside a terminal
 - [ ] 5.5 Build the xterm theme from the CSS custom properties and re-apply on `prefers-color-scheme` change; verify manually in light and dark OS modes that text, cursor, selection, and `ls --color`/`Get-ChildItem` output are legible
 - [x] 5.6 Update README: Terminal section (panel, tabs, shell per platform, starts in repo root, survives repo switches, no auto-refresh), `` Ctrl+` `` and `Ctrl+Shift+C/V` in the shortcuts table, and the read-only wording clarified for terminal commands; verify the README renders and its statements match the specs
 
-## 6. Integration checks
+## 6. Maximize and close-on-exit
 
-- [x] 6.1 Run `npm test`, `npm run typecheck`, `npm run test:rust`, and `npm run build`; verify all pass
-- [ ] 6.2 Manual end-to-end check in `npm run tauri dev` on Windows against the `terminal` spec scenarios: run `git status` with colors, `Ctrl+C` a running command, open two terminals and switch with output preserved, `exit` shows the exit code, close a tab with a running command (process gone), hide/show keeps output, switch repository (old terminal stays, new one starts in new root), `Ctrl+R` in terminal does not refresh the diff, and a terminal command editing a file changes the diff only after `Ctrl+R`
-- [ ] 6.3 Contingency: if 3.2 or 6.2 shows grandchild processes surviving on Windows, assign each shell to a Job Object with `KILL_ON_JOB_CLOSE` and re-run the 3.2 check; otherwise mark not needed
+- [ ] 6.1 Close a terminal's tab when its shell exits (store `onExit` → `closeTerminal`), remove the "exited" status and exit message; verify store and session tests: an exit closes the tab, the last exit hides the panel, and a start failure keeps its tab
+- [ ] 6.2 Add `terminalMaximized` and `toggleTerminalMaximized` to the store, a maximize/restore button in the panel header, the `terminal-maximized` workspace class hiding the file pane, and no drag handle while maximized; verify component tests for maximize, restore, and hide/show keeping it maximized, and manually that the terminal refits to the full area
+- [ ] 6.3 Update README's Terminal section for both behaviours; verify it matches the spec
+
+## 7. Integration checks
+
+- [ ] 7.1 Run `npm test`, `npm run typecheck`, `npm run test:rust`, and `npm run build`; verify all pass
+- [ ] 7.2 Manual end-to-end check in `npm run tauri dev` on Windows against the `terminal` spec scenarios: run `git status` with colors, `Ctrl+C` a running command, open two terminals and switch with output preserved, `exit` closes its tab (and the panel when it was the last), close a tab with a running command (process gone), hide/show keeps output, switch repository (old terminal stays, new one starts in new root), `Ctrl+R` in terminal does not refresh the diff, and a terminal command editing a file changes the diff only after `Ctrl+R`
+- [ ] 7.3 Contingency: if 3.2 or 7.2 shows grandchild processes surviving on Windows, assign each shell to a Job Object with `KILL_ON_JOB_CLOSE` and re-run the 3.2 check; otherwise mark not needed

@@ -63,7 +63,7 @@ Use `@xterm/xterm` with `@xterm/addon-fit`. A small `src/terminal/sessions.ts` r
 - hiding the panel or switching tabs never destroys scrollback (inactive terminals are kept mounted with `display: none`, and fitting is skipped while their size is 0);
 - React StrictMode double-mounts cannot spawn two shells (the registry is idempotent per tab id).
 
-The store gets a terminal slice holding only serialisable metadata: `terminalOpen`, `terminalHeight` (both persisted under `differential.terminalOpen` / `differential.terminalHeight`), `terminals: { id, title, status: "starting" | "running" | { exited: code } | { failed: message } }[]`, `activeTerminal`, and actions `toggleTerminal`, `newTerminal`, `closeTerminal`, `setActiveTerminal`, `setTerminalHeight`. `closeTerminal` calls into the registry (which calls `api.terminalClose` and disposes the xterm). Tab titles are "Terminal 1", "Terminal 2", … (shell-set titles via `onTitleChange` may override).
+The store gets a terminal slice holding only serialisable metadata: `terminalOpen`, `terminalHeight` (both persisted under `differential.terminalOpen` / `differential.terminalHeight`), `terminals: { id, title, status: "starting" | "running" | { failed: message } }[]`, `activeTerminal`, and actions `toggleTerminal`, `newTerminal`, `closeTerminal`, `setActiveTerminal`, `setTerminalHeight`. `closeTerminal` calls into the registry (which calls `api.terminalClose` and disposes the xterm). Tab titles are "Terminal 1", "Terminal 2", … (shell-set titles via `onTitleChange` may override).
 
 `Api` gains `terminalSpawn`, `terminalWrite`, `terminalResize`, `terminalClose`; `tauriApi` implements them with `invoke` and `new Channel()`.
 
@@ -71,6 +71,13 @@ Resizing: a `ResizeObserver` on the panel body triggers `fit()` (debounced with 
 
 ### Layout
 The right-hand column of `.main` becomes a vertical stack: `DiffPane`, a 4px drag handle, and `TerminalPanel` (height from the store) — the panel sits under the file pane only, leaving the sidebar full height (as in common editors). Height is clamped to `[120px, container − 160px]` while dragging and on window resize. The panel header has the tab strip, a "+" (new terminal) button, and a hide button; the toolbar gets a terminal toggle button with `aria-pressed`, disabled when no repo is open.
+
+### Maximizing
+The store holds `terminalMaximized` (session-only, not persisted) and `toggleTerminalMaximized`. `App` adds a `terminal-maximized` class to the workspace column while the panel is open and maximized; CSS then hides `DiffPane` (`display: none`, so its state and scroll positions survive) and lets the panel flex to fill the column, ignoring the stored height. The drag handle is not rendered while maximized, so restoring returns to the stored height untouched. The existing `ResizeObserver` refits the terminal to the new area. A header button toggles it.
+- *Alternatives:* the OS full-screen window (hides the toolbar too and is a window-level concern, not a panel one); covering the sidebar as well (`Ctrl+B` already hides it, so the two compose).
+
+### Shell exit closes the tab
+When a session's exit notification arrives (any exit code), the registry reports `onExit` and the store calls `closeTerminal(id)` — the same path as the user closing it, so the last one hides the panel. No exit message is written, and there is no "exited" tab state. A shell that fails to *start* still keeps its tab, showing the error, since there is no session to have exited and the user needs to see why.
 
 ### Keyboard handling
 - `handleShortcut` first checks whether the event target is inside a terminal (`closest("[data-terminal]")`). If so it handles only the panel toggle and returns `false` for everything else, so `Ctrl+R`, `Ctrl+W`, `Ctrl+B`, `Ctrl+Tab`, `[`/`]` reach the shell.
