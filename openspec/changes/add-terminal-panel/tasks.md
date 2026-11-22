@@ -2,8 +2,8 @@
 
 ## 1. Dependencies
 
-- [ ] 1.1 Add `portable-pty` to `src-tauri/Cargo.toml` and verify `cargo build --manifest-path src-tauri/Cargo.toml` succeeds
-- [ ] 1.2 Add `@xterm/xterm` and `@xterm/addon-fit` to `package.json` and verify `npm install` and `npm run typecheck` succeed
+- [x] 1.1 Add `portable-pty` to `src-tauri/Cargo.toml` and verify `cargo build --manifest-path src-tauri/Cargo.toml` succeeds
+- [x] 1.2 Add `@xterm/xterm` and `@xterm/addon-fit` to `package.json` and verify `npm install` and `npm run typecheck` succeed
 
 ## 2. Backend: shell resolution and session manager
 
