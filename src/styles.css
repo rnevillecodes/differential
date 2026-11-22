@@ -426,6 +426,12 @@ button:focus-visible {
   border-radius: 0 6px 6px 0;
   margin-left: -1px;
 }
+/* The buttons share a border; draw the selected (or focused) one on top so all four sides show. */
+.segmented button[aria-pressed="true"],
+.segmented button:focus-visible {
+  position: relative;
+  z-index: 1;
+}
 
 /* ---- sidebar ---- */
 
