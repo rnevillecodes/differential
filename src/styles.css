@@ -763,7 +763,9 @@ button:focus-visible {
   visibility: hidden;
 }
 .editor-tab.active .editor-tab-close,
-.editor-tab:hover .editor-tab-close {
+.editor-tab:hover .editor-tab-close,
+.terminal-tab.active .editor-tab-close,
+.terminal-tab:hover .editor-tab-close {
   visibility: visible;
 }
 .editor-tab-close:hover {
