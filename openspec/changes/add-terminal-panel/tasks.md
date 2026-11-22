@@ -37,6 +37,6 @@
 
 ## 6. Integration checks
 
-- [ ] 6.1 Run `npm test`, `npm run typecheck`, `npm run test:rust`, and `npm run build`; verify all pass
+- [x] 6.1 Run `npm test`, `npm run typecheck`, `npm run test:rust`, and `npm run build`; verify all pass
 - [ ] 6.2 Manual end-to-end check in `npm run tauri dev` on Windows against the `terminal` spec scenarios: run `git status` with colors, `Ctrl+C` a running command, open two terminals and switch with output preserved, `exit` shows the exit code, close a tab with a running command (process gone), hide/show keeps output, switch repository (old terminal stays, new one starts in new root), `Ctrl+R` in terminal does not refresh the diff, and a terminal command editing a file changes the diff only after `Ctrl+R`
 - [ ] 6.3 Contingency: if 3.2 or 6.2 shows grandchild processes surviving on Windows, assign each shell to a Job Object with `KILL_ON_JOB_CLOSE` and re-run the 3.2 check; otherwise mark not needed
