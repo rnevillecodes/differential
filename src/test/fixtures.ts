@@ -84,6 +84,10 @@ export function fakeApi(over: Partial<Api> = {}): Api {
       { name: "v1.0", rev: "v1.0", kind: "tag" as const, current: false },
     ]),
     pickFolder: vi.fn(async () => null),
+    terminalSpawn: vi.fn(async () => 1),
+    terminalWrite: vi.fn(async () => {}),
+    terminalResize: vi.fn(async () => {}),
+    terminalClose: vi.fn(async () => {}),
     ...over,
   };
 }

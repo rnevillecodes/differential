@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAppStore, type AppState } from "./store";
+import { createAppStore, DEFAULT_TERMINAL_HEIGHT, MIN_TERMINAL_HEIGHT, type AppState } from "./store";
+import type { TerminalSessionEvents } from "./terminal/sessions";
 import { changeSet, fakeApi, flush, memoryStorage, summary } from "./test/fixtures";
 
 describe("app store", () => {
@@ -481,5 +482,130 @@ describe("project explorer state", () => {
     exclusive(store.getState());
     expect(store.getState().selectedId).toBe(1);
     expect(viewed(store.getState())).toBeNull();
+  });
+});
+
+describe("terminal panel state", () => {
+  function setup(saved: Record<string, string> = {}) {
+    const storage = memoryStorage(saved);
+    const sessions = {
+      attach: vi.fn(),
+      focus: vi.fn(),
+      hasSelection: vi.fn(() => false),
+      copy: vi.fn(),
+      paste: vi.fn(),
+      close: vi.fn(),
+      has: vi.fn(() => false),
+    };
+    let events!: TerminalSessionEvents;
+    const store = createAppStore(fakeApi(), storage, (_api, ev) => {
+      events = ev;
+      return sessions;
+    });
+    return { store, storage, sessions, events: () => events };
+  }
+
+  it("is hidden by default and cannot be shown without a repository", () => {
+    const { store } = setup();
+    expect(store.getState().terminalOpen).toBe(false);
+    store.getState().toggleTerminal();
+    store.getState().newTerminal();
+    expect(store.getState().terminalOpen).toBe(false);
+    expect(store.getState().terminals).toEqual([]);
+  });
+
+  it("starts a terminal in the repository root the first time it is shown", async () => {
+    const { store, storage } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().toggleTerminal();
+    const s = store.getState();
+    expect(s.terminalOpen).toBe(true);
+    expect(storage.data["differential.terminalOpen"]).toBe("true");
+    expect(s.terminals).toEqual([{ id: 1, title: "Terminal 1", cwd: "C:/repo", status: { kind: "starting" } }]);
+    expect(s.activeTerminal).toBe(1);
+  });
+
+  it("hides and shows without touching running terminals", async () => {
+    const { store, sessions } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().toggleTerminal();
+    store.getState().toggleTerminal();
+    expect(store.getState().terminalOpen).toBe(false);
+    expect(store.getState().terminals).toHaveLength(1);
+    store.getState().toggleTerminal();
+    expect(store.getState().terminals).toHaveLength(1);
+    expect(sessions.close).not.toHaveBeenCalled();
+  });
+
+  it("adds, switches and closes terminals; closing the last hides the panel", async () => {
+    const { store, sessions, storage } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    expect(store.getState().terminals.map((t) => t.title)).toEqual(["Terminal 1", "Terminal 2", "Terminal 3"]);
+    expect(store.getState().activeTerminal).toBe(3);
+
+    store.getState().setActiveTerminal(2);
+    store.getState().closeTerminal(2);
+    expect(sessions.close).toHaveBeenCalledWith(2);
+    expect(store.getState().activeTerminal).toBe(3);
+
+    store.getState().closeTerminal(3);
+    expect(store.getState().activeTerminal).toBe(1);
+    expect(store.getState().terminalOpen).toBe(true);
+
+    store.getState().closeTerminal(1);
+    expect(store.getState().terminals).toEqual([]);
+    expect(store.getState().activeTerminal).toBeNull();
+    expect(store.getState().terminalOpen).toBe(false);
+    expect(storage.data["differential.terminalOpen"]).toBe("false");
+
+    store.getState().newTerminal();
+    expect(store.getState().terminals[0].title).toBe("Terminal 4");
+  });
+
+  it("tracks session status from the session events", async () => {
+    const { store, events } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    events().onRunning(1);
+    events().onExit(1, 0);
+    events().onFailed(2, "no shell");
+    events().onExit(99, 1);
+    expect(store.getState().terminals.map((t) => t.status)).toEqual([
+      { kind: "exited", code: 0 },
+      { kind: "failed", message: "no shell" },
+    ]);
+  });
+
+  it("keeps terminals when switching repositories; new ones start in the new root", async () => {
+    const { store, sessions } = setup();
+    await store.getState().openPath("C:/one");
+    store.getState().toggleTerminal();
+    await store.getState().openPath("C:/two");
+    expect(store.getState().terminals.map((t) => t.cwd)).toEqual(["C:/one"]);
+    store.getState().newTerminal();
+    expect(store.getState().terminals.map((t) => t.cwd)).toEqual(["C:/one", "C:/two"]);
+    expect(sessions.close).not.toHaveBeenCalled();
+  });
+
+  it("restores an open panel with one new terminal when a repository opens", async () => {
+    const { store } = setup({ "differential.terminalOpen": "true", "differential.terminalHeight": "333" });
+    expect(store.getState().terminalHeight).toBe(333);
+    await store.getState().openPath("C:/repo");
+    expect(store.getState().terminalOpen).toBe(true);
+    expect(store.getState().terminals).toHaveLength(1);
+  });
+
+  it("persists the height with a lower bound", () => {
+    const { store, storage } = setup({ "differential.terminalHeight": "nonsense" });
+    expect(store.getState().terminalHeight).toBe(DEFAULT_TERMINAL_HEIGHT);
+    store.getState().setTerminalHeight(400.4);
+    expect(store.getState().terminalHeight).toBe(400);
+    expect(storage.data["differential.terminalHeight"]).toBe("400");
+    store.getState().setTerminalHeight(10);
+    expect(store.getState().terminalHeight).toBe(MIN_TERMINAL_HEIGHT);
   });
 });

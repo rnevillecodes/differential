@@ -13,6 +13,7 @@ import type { FileSummary } from "./model/FileSummary";
 import type { FileView } from "./model/FileView";
 import type { RefInfo } from "./model/RefInfo";
 import type { RepoInfo } from "./model/RepoInfo";
+import { createTerminalSessions, type TerminalSessions } from "./terminal/sessions";
 import { ancestorsOf } from "./tree/build";
 
 export type ViewMode = "unified" | "split";
@@ -44,6 +45,25 @@ export interface Tab {
   /** A preview tab is replaced by the next file opened; pinning it keeps it open. */
   preview: boolean;
 }
+
+export type TerminalStatus =
+  | { kind: "starting" }
+  | { kind: "running" }
+  | { kind: "exited"; code: number | null }
+  | { kind: "failed"; message: string };
+
+/** A terminal tab in the terminal panel; its xterm and shell live in `terminalSessions`. */
+export interface TerminalTab {
+  id: number;
+  title: string;
+  /** Directory the shell was started in (the repository root at creation time). */
+  cwd: string;
+  status: TerminalStatus;
+}
+
+/** Smallest terminal panel height, in pixels. */
+export const MIN_TERMINAL_HEIGHT = 120;
+export const DEFAULT_TERMINAL_HEIGHT = 260;
 
 export interface AppState {
   repo: RepoInfo | null;
@@ -85,6 +105,16 @@ export interface AppState {
   /** Whether the repository picker dropdown is open. */
   repoPickerOpen: boolean;
 
+  /** Whether the terminal panel is shown (persisted). */
+  terminalOpen: boolean;
+  /** Terminal panel height in pixels (persisted). */
+  terminalHeight: number;
+  /** Terminal tabs, in display order. */
+  terminals: TerminalTab[];
+  activeTerminal: number | null;
+  /** The xterm instances and shells behind `terminals` (not reactive). */
+  terminalSessions: TerminalSessions;
+
   init(): Promise<void>;
   openPath(path: string, base?: string): Promise<void>;
   pickAndOpen(): Promise<void>;
@@ -121,6 +151,15 @@ export interface AppState {
   setRepoPickerOpen(open: boolean): void;
   /** Forget a repository in the recent list. */
   removeRecentRepo(root: string): void;
+
+  /** Show or hide the terminal panel; showing an empty panel starts a terminal. No-op without a repository. */
+  toggleTerminal(): void;
+  /** Open a new terminal in the current repository's root and show it. */
+  newTerminal(): void;
+  /** End a terminal's shell and remove its tab; closing the last one hides the panel. */
+  closeTerminal(id: number): void;
+  setActiveTerminal(id: number): void;
+  setTerminalHeight(height: number): void;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -150,6 +189,8 @@ const VIEW_MODE_KEY = "differential.viewMode";
 const SIDEBAR_TAB_KEY = "differential.sidebarTab";
 const SIDEBAR_OPEN_KEY = "differential.sidebarOpen";
 const RECENT_REPOS_KEY = "differential.recentRepos";
+const TERMINAL_OPEN_KEY = "differential.terminalOpen";
+const TERMINAL_HEIGHT_KEY = "differential.terminalHeight";
 const MAX_RECENT_REPOS = 20;
 
 function readRecent(storage: KeyValue): string[] {
@@ -198,7 +239,16 @@ function foldersOf(paths: Iterable<string>): Set<string> {
   return out;
 }
 
-export function createAppStore(api: Api, storage: KeyValue = browserStorage): StoreApi<AppState> {
+function readHeight(storage: KeyValue): number {
+  const h = Number(storage.get(TERMINAL_HEIGHT_KEY));
+  return Number.isFinite(h) && h >= MIN_TERMINAL_HEIGHT ? Math.round(h) : DEFAULT_TERMINAL_HEIGHT;
+}
+
+export function createAppStore(
+  api: Api,
+  storage: KeyValue = browserStorage,
+  makeSessions: typeof createTerminalSessions = createTerminalSessions,
+): StoreApi<AppState> {
   // Incremented on every change-set load; stale responses are dropped.
   let generation = 0;
   // Every unchanged-file request gets a token; a response is applied only if it is the
@@ -208,6 +258,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
   // Incremented on every ref-list load and on opening a repository; stale responses are dropped.
   let refsGen = 0;
   let initialized = false;
+  // Terminal tab ids (and their "Terminal N" titles) are never reused.
+  let terminalSeq = 0;
 
   return createStore<AppState>((set, get) => {
     /** Whether the project listing should be (re)loaded with the change set. */
@@ -441,6 +493,23 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       get().select(next);
     };
 
+    const setTerminalStatus = (id: number, status: TerminalStatus) => {
+      const { terminals } = get();
+      if (terminals.some((t) => t.id === id))
+        set({ terminals: terminals.map((t) => (t.id === id ? { ...t, status } : t)) });
+    };
+
+    const terminalSessions = makeSessions(api, {
+      onRunning: (id) => setTerminalStatus(id, { kind: "running" }),
+      onExit: (id, code) => setTerminalStatus(id, { kind: "exited", code }),
+      onFailed: (id, message) => setTerminalStatus(id, { kind: "failed", message }),
+    });
+
+    const setTerminalOpen = (open: boolean) => {
+      storage.set(TERMINAL_OPEN_KEY, String(open));
+      set({ terminalOpen: open });
+    };
+
     const savedMode = storage.get(VIEW_MODE_KEY);
     const savedTab = storage.get(SIDEBAR_TAB_KEY);
 
@@ -466,6 +535,11 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
       views: {},
       recentRepos: readRecent(storage),
       repoPickerOpen: false,
+      terminalOpen: storage.get(TERMINAL_OPEN_KEY) === "true",
+      terminalHeight: readHeight(storage),
+      terminals: [],
+      activeTerminal: null,
+      terminalSessions,
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -509,6 +583,8 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
         setRecent(
           [repo.root, ...get().recentRepos.filter((r) => !sameRoot(r, repo.root))].slice(0, MAX_RECENT_REPOS),
         );
+        // The panel was left open (e.g. at the last exit): give it a terminal in this repository.
+        if (get().terminalOpen && get().terminals.length === 0) get().newTerminal();
         const refsLoaded = loadRefs(repo.root);
         await loadChanges(repo.root, base?.trim() || "HEAD", false);
         await refsLoaded;
@@ -626,6 +702,45 @@ export function createAppStore(api: Api, storage: KeyValue = browserStorage): St
 
       removeRecentRepo(root) {
         setRecent(get().recentRepos.filter((r) => r !== root));
+      },
+
+      toggleTerminal() {
+        if (!get().repo) return;
+        const open = !get().terminalOpen;
+        setTerminalOpen(open);
+        if (open && get().terminals.length === 0) get().newTerminal();
+      },
+
+      newTerminal() {
+        const { repo, terminals } = get();
+        if (!repo) return;
+        const id = ++terminalSeq;
+        const tab: TerminalTab = { id, title: `Terminal ${id}`, cwd: repo.root, status: { kind: "starting" } };
+        set({ terminals: [...terminals, tab], activeTerminal: id });
+        if (!get().terminalOpen) setTerminalOpen(true);
+      },
+
+      closeTerminal(id) {
+        const { terminals, activeTerminal } = get();
+        const i = terminals.findIndex((t) => t.id === id);
+        if (i < 0) return;
+        terminalSessions.close(id);
+        const rest = terminals.filter((t) => t.id !== id);
+        const next =
+          activeTerminal !== id ? activeTerminal : (rest[Math.min(i, rest.length - 1)]?.id ?? null);
+        set({ terminals: rest, activeTerminal: next });
+        if (rest.length === 0) setTerminalOpen(false);
+      },
+
+      setActiveTerminal(id) {
+        if (get().terminals.some((t) => t.id === id)) set({ activeTerminal: id });
+      },
+
+      setTerminalHeight(height) {
+        const h = Math.max(MIN_TERMINAL_HEIGHT, Math.round(height));
+        if (h === get().terminalHeight) return;
+        storage.set(TERMINAL_HEIGHT_KEY, String(h));
+        set({ terminalHeight: h });
       },
     };
   });

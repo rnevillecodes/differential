@@ -1,6 +1,6 @@
 // Typed wrappers around the backend's Tauri commands.
 
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ChangeSet } from "../model/ChangeSet";
 import type { ErrorPayload } from "../model/ErrorPayload";
@@ -10,6 +10,7 @@ import type { FileView } from "../model/FileView";
 import type { RefInfo } from "../model/RefInfo";
 import type { RepoInfo } from "../model/RepoInfo";
 import type { Side } from "../model/Side";
+import type { TerminalExit } from "../model/TerminalExit";
 
 export interface InitialArgs {
   path: string | null;
@@ -30,6 +31,29 @@ export interface Api {
   /** Local branches, remote-tracking branches and tags, most recent first. */
   listRefs(root: string): Promise<RefInfo[]>;
   pickFolder(): Promise<string | null>;
+  /**
+   * Start the user's shell in `cwd` in a `cols`×`rows` pseudo-terminal. `onData` receives raw
+   * output in order; `onExit` is called once, after the last output. Resolves to the session id.
+   */
+  terminalSpawn(
+    cwd: string,
+    cols: number,
+    rows: number,
+    onData: (bytes: Uint8Array) => void,
+    onExit: (exit: TerminalExit) => void,
+  ): Promise<number>;
+  /** Send input to a session; unknown ids are ignored. */
+  terminalWrite(id: number, data: string): Promise<void>;
+  terminalResize(id: number, cols: number, rows: number): Promise<void>;
+  /** End a session's shell and its programs; unknown ids are ignored. */
+  terminalClose(id: number): Promise<void>;
+}
+
+/** Raw channel messages arrive as an ArrayBuffer (or a byte array from older runtimes). */
+function toBytes(msg: unknown): Uint8Array {
+  if (msg instanceof ArrayBuffer) return new Uint8Array(msg);
+  if (ArrayBuffer.isView(msg)) return new Uint8Array(msg.buffer, msg.byteOffset, msg.byteLength);
+  return Uint8Array.from(msg as number[]);
 }
 
 export const tauriApi: Api = {
@@ -45,6 +69,16 @@ export const tauriApi: Api = {
     const picked = await open({ directory: true, multiple: false, title: "Open repository" });
     return typeof picked === "string" ? picked : null;
   },
+  terminalSpawn: (cwd, cols, rows, onData, onExit) => {
+    const dataChannel = new Channel<unknown>();
+    dataChannel.onmessage = (msg) => onData(toBytes(msg));
+    const exitChannel = new Channel<TerminalExit>();
+    exitChannel.onmessage = onExit;
+    return invoke("terminal_spawn", { cwd, cols, rows, onData: dataChannel, onExit: exitChannel });
+  },
+  terminalWrite: (id, data) => invoke("terminal_write", { id, data }),
+  terminalResize: (id, cols, rows) => invoke("terminal_resize", { id, cols, rows }),
+  terminalClose: (id) => invoke("terminal_close", { id }),
 };
 
 export function isErrorPayload(e: unknown): e is ErrorPayload {
