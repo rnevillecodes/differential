@@ -991,6 +991,14 @@ button:focus-visible {
 .workspace > .diff-pane {
   flex: 1;
 }
+/* Maximized terminal: the file pane is hidden (not unmounted) and the panel fills the column. */
+.workspace.terminal-maximized > .diff-pane {
+  display: none;
+}
+.workspace.terminal-maximized > .terminal-panel {
+  flex: 1;
+  border-top: none;
+}
 .terminal-toggle[aria-pressed="true"] {
   color: var(--fg);
 }

@@ -108,6 +108,8 @@ export interface AppState {
   terminalOpen: boolean;
   /** Terminal panel height in pixels (persisted). */
   terminalHeight: number;
+  /** Whether the open panel fills the file pane's area (this session only). */
+  terminalMaximized: boolean;
   /** Terminal tabs, in display order. */
   terminals: TerminalTab[];
   activeTerminal: number | null;
@@ -159,6 +161,8 @@ export interface AppState {
   closeTerminal(id: number): void;
   setActiveTerminal(id: number): void;
   setTerminalHeight(height: number): void;
+  /** Maximize the terminal panel over the file pane, or restore it to its height. */
+  toggleTerminalMaximized(): void;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -540,6 +544,7 @@ export function createAppStore(
       terminals: [],
       activeTerminal: null,
       terminalSessions,
+      terminalMaximized: false,
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -734,6 +739,10 @@ export function createAppStore(
 
       setActiveTerminal(id) {
         if (get().terminals.some((t) => t.id === id)) set({ activeTerminal: id });
+      },
+
+      toggleTerminalMaximized() {
+        set({ terminalMaximized: !get().terminalMaximized });
       },
 
       setTerminalHeight(height) {

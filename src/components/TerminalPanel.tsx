@@ -1,7 +1,7 @@
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { MIN_TERMINAL_HEIGHT, useApp, type TerminalTab } from "../store";
-import { ChevronDownIcon, PlusIcon } from "./icons";
+import { ChevronDownIcon, MaximizeIcon, PlusIcon, RestoreIcon } from "./icons";
 
 /** Space always left for the file pane above the terminal panel, in pixels. */
 export const MIN_FILE_PANE_HEIGHT = 160;
@@ -22,6 +22,8 @@ export function TerminalPanel() {
   const closeTerminal = useApp((s) => s.closeTerminal);
   const setActiveTerminal = useApp((s) => s.setActiveTerminal);
   const setTerminalHeight = useApp((s) => s.setTerminalHeight);
+  const maximized = useApp((s) => s.terminalMaximized);
+  const toggleTerminalMaximized = useApp((s) => s.toggleTerminalMaximized);
   const panelRef = useRef<HTMLElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; canCopy: boolean } | null>(null);
 
@@ -87,15 +89,21 @@ export function TerminalPanel() {
       className="terminal-panel"
       aria-label="Terminal"
       hidden={!open}
-      style={{ height: `clamp(${MIN_TERMINAL_HEIGHT}px, ${height}px, calc(100% - ${MIN_FILE_PANE_HEIGHT}px))` }}
+      style={
+        maximized
+          ? undefined
+          : { height: `clamp(${MIN_TERMINAL_HEIGHT}px, ${height}px, calc(100% - ${MIN_FILE_PANE_HEIGHT}px))` }
+      }
     >
-      <div
-        className="terminal-resize"
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize terminal panel"
-        onPointerDown={onResizeStart}
-      />
+      {!maximized && (
+        <div
+          className="terminal-resize"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize terminal panel"
+          onPointerDown={onResizeStart}
+        />
+      )}
       <div className="terminal-header">
         <div className="terminal-tabs" role="tablist" aria-label="Terminals">
           {terminals.map((t) => (
@@ -110,6 +118,16 @@ export function TerminalPanel() {
         </div>
         <button type="button" className="icon-button" aria-label="New terminal" title="New terminal" onClick={newTerminal}>
           <PlusIcon />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label={maximized ? "Restore terminal panel" : "Maximize terminal panel"}
+          aria-pressed={maximized}
+          title={maximized ? "Restore panel size" : "Maximize panel"}
+          onClick={toggleTerminalMaximized}
+        >
+          {maximized ? <RestoreIcon /> : <MaximizeIcon />}
         </button>
         <button
           type="button"

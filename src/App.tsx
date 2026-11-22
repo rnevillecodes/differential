@@ -75,10 +75,12 @@ export default function App({ store: injected }: { store?: StoreApi<AppState> })
 
 function Main() {
   const sidebarOpen = useApp((s) => s.sidebarOpen);
+  // The file pane gives way to the terminal only while the panel is actually shown.
+  const terminalMaximized = useApp((s) => s.terminalMaximized && s.terminalOpen && s.repo !== null);
   return (
     <main className={`main${sidebarOpen ? "" : " sidebar-hidden"}`}>
       {sidebarOpen && <Sidebar />}
-      <div className="workspace">
+      <div className={`workspace${terminalMaximized ? " terminal-maximized" : ""}`}>
         <DiffPane />
         <TerminalPanel />
       </div>

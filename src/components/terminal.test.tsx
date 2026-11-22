@@ -126,6 +126,37 @@ describe("terminal panel", () => {
     expect(terminalTabs()[0]).toHaveTextContent("(failed)");
   });
 
+  it("maximizes over the file pane and restores to its height", async () => {
+    await renderApp({ saved: { "differential.terminalOpen": "true", "differential.terminalHeight": "260" } });
+    const workspace = document.querySelector(".workspace")!;
+    expect(workspace).not.toHaveClass("terminal-maximized");
+    expect(screen.getByRole("separator", { name: "Resize terminal panel" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Maximize terminal panel" }));
+    expect(workspace).toHaveClass("terminal-maximized");
+    expect(panel()!.style.height).toBe("");
+    expect(screen.queryByRole("separator", { name: "Resize terminal panel" })).toBeNull();
+    // The file pane stays mounted, only hidden by the class.
+    expect(workspace.querySelector(".diff-pane")).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Restore terminal panel" }));
+    expect(workspace).not.toHaveClass("terminal-maximized");
+    expect(panel()!.style.height).toContain("260px");
+  });
+
+  it("shows the file pane while a maximized panel is hidden, and stays maximized when shown", async () => {
+    await renderApp();
+    await toggleKey();
+    fireEvent.click(screen.getByRole("button", { name: "Maximize terminal panel" }));
+    const workspace = document.querySelector(".workspace")!;
+    await toggleKey();
+    expect(panel()).not.toBeVisible();
+    expect(workspace).not.toHaveClass("terminal-maximized");
+    await toggleKey();
+    expect(workspace).toHaveClass("terminal-maximized");
+    expect(screen.getByRole("button", { name: "Restore terminal panel" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("uses the persisted height", async () => {
     await renderApp({ saved: { "differential.terminalOpen": "true", "differential.terminalHeight": "333" } });
     expect(panel()).toBeVisible();
