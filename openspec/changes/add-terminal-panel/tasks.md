@@ -7,11 +7,11 @@
 
 ## 2. Backend: shell resolution and session manager
 
-- [ ] 2.1 Add `src-tauri/src/terminal/shell.rs` with a pure `resolve_shell(os, env, path_lookup)` (Windows: `pwsh.exe` on PATH else `powershell.exe` with `-NoLogo`; macOS: `$SHELL` or `/bin/zsh` with `-l`; others: `$SHELL` or `/bin/sh`) plus the `TERM`/`COLORTERM` env; verify with unit tests covering each platform branch and fallback
-- [ ] 2.2 Add `src-tauri/src/terminal/mod.rs` with `TerminalManager` (`Mutex<HashMap<u32, Session>>`, id counter) and `spawn` (validates `cwd` is an existing directory, opens a PTY at `cols`×`rows`, starts the shell), taking an output sink and exit sink as closures so it is testable without Tauri; verify a Rust test spawning a short command (`cmd /c echo hi` on Windows, `sh -c 'echo hi'` elsewhere) receives `hi` in its output and an exit code of 0
-- [ ] 2.3 Implement the reader thread (64 KiB chunks) and waiter thread (wait → drop master → join reader → report exit) so exit is always reported after the last output; verify the test from 2.2 asserts ordering and that a command printing >1 MiB delivers all bytes before exit
-- [ ] 2.4 Implement `write`, `resize`, `close` (kill child + drop master, idempotent, unknown id is a no-op) and `close_all`; verify Rust tests: writing `echo marker` plus newline to a spawned interactive shell yields `marker`; `close` on a session running a long sleep reports exit promptly; `close` twice does not error; spawn with a missing `cwd` returns an `Io` error
-- [ ] 2.5 Map spawn failures (shell not found) to `AppError::Io` with the shell name in the message; verify with a test using an overridden, nonexistent shell path
+- [x] 2.1 Add `src-tauri/src/terminal/shell.rs` with a pure `resolve_shell(os, env, path_lookup)` (Windows: `pwsh.exe` on PATH else `powershell.exe` with `-NoLogo`; macOS: `$SHELL` or `/bin/zsh` with `-l`; others: `$SHELL` or `/bin/sh`) plus the `TERM`/`COLORTERM` env; verify with unit tests covering each platform branch and fallback
+- [x] 2.2 Add `src-tauri/src/terminal/mod.rs` with `TerminalManager` (`Mutex<HashMap<u32, Session>>`, id counter) and `spawn` (validates `cwd` is an existing directory, opens a PTY at `cols`×`rows`, starts the shell), taking an output sink and exit sink as closures so it is testable without Tauri; verify a Rust test spawning a short command (`cmd /c echo hi` on Windows, `sh -c 'echo hi'` elsewhere) receives `hi` in its output and an exit code of 0
+- [x] 2.3 Implement the reader thread (64 KiB chunks) and waiter thread (wait → drop master → join reader → report exit) so exit is always reported after the last output; verify the test from 2.2 asserts ordering and that a command printing >1 MiB delivers all bytes before exit
+- [x] 2.4 Implement `write`, `resize`, `close` (kill child + drop master, idempotent, unknown id is a no-op) and `close_all`; verify Rust tests: writing `echo marker` plus newline to a spawned interactive shell yields `marker`; `close` on a session running a long sleep reports exit promptly; `close` twice does not error; spawn with a missing `cwd` returns an `Io` error
+- [x] 2.5 Map spawn failures (shell not found) to `AppError::Io` with the shell name in the message; verify with a test using an overridden, nonexistent shell path
 
 ## 3. Backend: Tauri commands and lifecycle
 
