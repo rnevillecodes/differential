@@ -37,7 +37,7 @@
 
 ## 6. Maximize and close-on-exit
 
-- [ ] 6.1 Close a terminal's tab when its shell exits (store `onExit` → `closeTerminal`), remove the "exited" status and exit message; verify store and session tests: an exit closes the tab, the last exit hides the panel, and a start failure keeps its tab
+- [x] 6.1 Close a terminal's tab when its shell exits (store `onExit` → `closeTerminal`), remove the "exited" status and exit message; verify store and session tests: an exit closes the tab, the last exit hides the panel, and a start failure keeps its tab
 - [ ] 6.2 Add `terminalMaximized` and `toggleTerminalMaximized` to the store, a maximize/restore button in the panel header, the `terminal-maximized` workspace class hiding the file pane, and no drag handle while maximized; verify component tests for maximize, restore, and hide/show keeping it maximized, and manually that the terminal refits to the full area
 - [ ] 6.3 Update README's Terminal section for both behaviours; verify it matches the spec
 

@@ -42,10 +42,6 @@ interface Entry {
 
 const isWindows = () => typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
 
-export function exitMessage(code: number | null): string {
-  return `\r\n\x1b[2m[Process exited with code ${code ?? "unknown"}]\x1b[0m\r\n`;
-}
-
 export function failureMessage(message: string): string {
   return `\x1b[31mCould not start the shell: ${message}\x1b[0m\r\n`;
 }
@@ -170,7 +166,8 @@ export function createTerminalSessions(api: Api, events: TerminalSessionEvents):
         },
         (exit: TerminalExit) => {
           if (entry.closed || entry.state === "ended") return;
-          end(entry, exitMessage(exit.code));
+          // The store closes the tab in response.
+          entry.state = "ended";
           events.onExit(id, exit.code);
         },
       )

@@ -565,19 +565,34 @@ describe("terminal panel state", () => {
     expect(store.getState().terminals[0].title).toBe("Terminal 4");
   });
 
-  it("tracks session status from the session events", async () => {
+  it("tracks session status from the session events; a start failure keeps its tab", async () => {
     const { store, events } = setup();
     await store.getState().openPath("C:/repo");
     store.getState().newTerminal();
     store.getState().newTerminal();
     events().onRunning(1);
-    events().onExit(1, 0);
     events().onFailed(2, "no shell");
-    events().onExit(99, 1);
     expect(store.getState().terminals.map((t) => t.status)).toEqual([
-      { kind: "exited", code: 0 },
+      { kind: "running" },
       { kind: "failed", message: "no shell" },
     ]);
+  });
+
+  it("closes a terminal's tab when its shell exits, whatever the code", async () => {
+    const { store, events, sessions } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    events().onExit(2, 1);
+    expect(store.getState().terminals.map((t) => t.id)).toEqual([1]);
+    expect(store.getState().activeTerminal).toBe(1);
+    expect(sessions.close).toHaveBeenCalledWith(2);
+    events().onExit(99, 0);
+    expect(store.getState().terminals).toHaveLength(1);
+
+    events().onExit(1, 0);
+    expect(store.getState().terminals).toEqual([]);
+    expect(store.getState().terminalOpen).toBe(false);
   });
 
   it("keeps terminals when switching repositories; new ones start in the new root", async () => {

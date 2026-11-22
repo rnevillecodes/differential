@@ -88,13 +88,42 @@ describe("terminal panel", () => {
     expect(panel()).not.toBeVisible();
   });
 
-  it("marks exited terminals", async () => {
+  it("closes a tab when its shell exits, hiding the panel after the last", async () => {
+    let exits: ((e: { code: number | null }) => void)[] = [];
+    const api = fakeApi({
+      terminalSpawn: vi.fn(async (_cwd, _c, _r, _d, onExit) => {
+        exits.push(onExit);
+        return exits.length;
+      }),
+    });
+    const store = createAppStore(api, memoryStorage());
+    await act(async () => {
+      await store.getState().openPath("C:/repo");
+    });
+    render(<App store={store} />);
+    await toggleKey();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "New terminal" }));
+      await flush();
+    });
+    expect(terminalTabs()).toHaveLength(2);
+    act(() => exits[0]({ code: 0 }));
+    expect(terminalTabs()).toHaveLength(1);
+    expect(terminalTabs()[0]).toHaveTextContent("Terminal 2");
+    act(() => exits[1]({ code: 1 }));
+    expect(panel()).toBeNull();
+    exits = [];
+  });
+
+  it("marks terminals whose shell failed to start", async () => {
     const { store } = await renderApp();
     await toggleKey();
     act(() => {
-      store.setState({ terminals: store.getState().terminals.map((t) => ({ ...t, status: { kind: "exited", code: 0 } })) });
+      store.setState({
+        terminals: store.getState().terminals.map((t) => ({ ...t, status: { kind: "failed", message: "nope" } })),
+      });
     });
-    expect(terminalTabs()[0]).toHaveTextContent("(exited)");
+    expect(terminalTabs()[0]).toHaveTextContent("(failed)");
   });
 
   it("uses the persisted height", async () => {

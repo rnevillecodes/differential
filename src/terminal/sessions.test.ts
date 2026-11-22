@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TerminalExit } from "../model/TerminalExit";
 import { fakeApi, flush } from "../test/fixtures";
 import { FakeTerminal } from "../test/xtermMock";
-import { createTerminalSessions, exitMessage, isToggleKey, type TerminalSessionEvents } from "./sessions";
+import { createTerminalSessions, isToggleKey, type TerminalSessionEvents } from "./sessions";
 
 function setup(spawn?: () => Promise<number>) {
   let onData: (b: Uint8Array) => void = () => {};
@@ -70,16 +70,15 @@ describe("terminal sessions", () => {
     expect(api.terminalSpawn).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the exit code and stops accepting input when the shell exits", async () => {
+  it("reports the exit once and stops sending input when the shell exits", async () => {
     const { api, sessions, host, events, exit } = setup();
     sessions.attach(1, "C:/repo", host);
     await flush();
-    exit(0);
-    const term = FakeTerminal.instances[0];
-    expect(term.text()).toContain(exitMessage(0));
-    expect(term.options.disableStdin).toBe(true);
-    expect(events.onExit).toHaveBeenCalledWith(1, 0);
-    term.dataHandler!("x");
+    exit(2);
+    exit(2);
+    expect(events.onExit).toHaveBeenCalledTimes(1);
+    expect(events.onExit).toHaveBeenCalledWith(1, 2);
+    FakeTerminal.instances[0].dataHandler!("x");
     expect(api.terminalWrite).not.toHaveBeenCalled();
   });
 

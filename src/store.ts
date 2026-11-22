@@ -49,7 +49,6 @@ export interface Tab {
 export type TerminalStatus =
   | { kind: "starting" }
   | { kind: "running" }
-  | { kind: "exited"; code: number | null }
   | { kind: "failed"; message: string };
 
 /** A terminal tab in the terminal panel; its xterm and shell live in `terminalSessions`. */
@@ -501,7 +500,8 @@ export function createAppStore(
 
     const terminalSessions = makeSessions(api, {
       onRunning: (id) => setTerminalStatus(id, { kind: "running" }),
-      onExit: (id, code) => setTerminalStatus(id, { kind: "exited", code }),
+      // A shell that exits on its own closes its tab, like the user closing it.
+      onExit: (id) => get().closeTerminal(id),
       onFailed: (id, message) => setTerminalStatus(id, { kind: "failed", message }),
     });
 

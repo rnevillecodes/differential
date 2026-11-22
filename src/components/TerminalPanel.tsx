@@ -146,14 +146,7 @@ export function TerminalPanel() {
 }
 
 function statusLabel(tab: TerminalTab): string | null {
-  switch (tab.status.kind) {
-    case "exited":
-      return "exited";
-    case "failed":
-      return "failed";
-    default:
-      return null;
-  }
+  return tab.status.kind === "failed" ? "failed" : null;
 }
 
 function TerminalTabButton({
@@ -169,11 +162,7 @@ function TerminalTabButton({
 }) {
   const label = statusLabel(tab);
   const tooltip =
-    tab.status.kind === "failed"
-      ? `${tab.title} — ${tab.status.message}`
-      : tab.status.kind === "exited"
-        ? `${tab.title} — exited with code ${tab.status.code ?? "unknown"}`
-        : `${tab.title} — ${tab.cwd}`;
+    tab.status.kind === "failed" ? `${tab.title} — ${tab.status.message}` : `${tab.title} — ${tab.cwd}`;
   return (
     <div
       className={`terminal-tab${active ? " active" : ""}${label ? ` ${label}` : ""}`}
