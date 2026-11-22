@@ -33,7 +33,7 @@
 - [x] 5.3 Add the toolbar terminal toggle (`aria-pressed`, disabled without a repo, title with `` Ctrl+` ``); verify a component test for its disabled and pressed states
 - [x] 5.4 Update `handleShortcut`: handle `ctrlKey && code === "Backquote"` everywhere; when the target is inside `[data-terminal]`, handle nothing else; in xterm's custom key handler swallow `` Ctrl+` `` and implement `Ctrl+Shift+C`/`Ctrl+Shift+V`, plus a Copy/Paste context menu; verify tests in the existing shortcut tests that `Ctrl+R`, `Ctrl+W`, `Ctrl+B`, `]` inside a terminal return `false` and do not call store actions, while `` Ctrl+` `` toggles the panel from both inside and outside a terminal
 - [ ] 5.5 Build the xterm theme from the CSS custom properties and re-apply on `prefers-color-scheme` change; verify manually in light and dark OS modes that text, cursor, selection, and `ls --color`/`Get-ChildItem` output are legible
-- [ ] 5.6 Update README: Terminal section (panel, tabs, shell per platform, starts in repo root, survives repo switches, no auto-refresh), `` Ctrl+` `` and `Ctrl+Shift+C/V` in the shortcuts table, and the read-only wording clarified for terminal commands; verify the README renders and its statements match the specs
+- [x] 5.6 Update README: Terminal section (panel, tabs, shell per platform, starts in repo root, survives repo switches, no auto-refresh), `` Ctrl+` `` and `Ctrl+Shift+C/V` in the shortcuts table, and the read-only wording clarified for terminal commands; verify the README renders and its statements match the specs
 
 ## 6. Integration checks
 

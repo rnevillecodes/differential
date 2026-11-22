@@ -4,7 +4,7 @@
 
 # Differential
 
-A fast, read-only desktop diff viewer for reviewing a git repository's changes — built for checking what a coding agent changed. It diffs a chosen **base ref** (default `HEAD`) against the **working tree**, including uncommitted and untracked files, and never modifies the repository.
+A fast, read-only desktop diff viewer for reviewing a git repository's changes — built for checking what a coding agent changed. It diffs a chosen **base ref** (default `HEAD`) against the **working tree**, including uncommitted and untracked files, and never modifies the repository itself (a built-in [terminal](#terminal) lets you run your own commands).
 
 Built with Tauri v2 (Rust backend that shells out to `git`) and React + TypeScript.
 
@@ -59,6 +59,9 @@ Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and
 | `Ctrl+R` | Refresh the diff, file tree, and branch list |
 | `Ctrl+O` | Switch repository (recent repositories) |
 | `Ctrl+\` | Toggle unified / side-by-side view |
+| ``Ctrl+` `` | Show / hide the terminal panel (works inside a terminal too) |
+
+While a terminal has keyboard focus, every other key goes to the shell; click outside the terminal to use the shortcuts above.
 
 The view mode is remembered across files and restarts. Shift+mouse wheel scrolls the pane under the pointer horizontally in side-by-side view.
 
@@ -84,6 +87,19 @@ In the Files tree:
 | `←` | Collapse a folder, or move to the parent folder |
 | `Enter` | Open a file in a tab that stays, or toggle a folder |
 
+### Terminal
+
+The terminal panel opens under the file pane with the terminal button at the right of the toolbar or ``Ctrl+` ``. Each terminal is a full interactive shell started in the open repository's root: PowerShell on Windows (PowerShell 7 when `pwsh` is installed, otherwise Windows PowerShell), your `$SHELL` as a login shell on macOS, and `$SHELL` (or `/bin/sh`) elsewhere. Colors, full-screen programs such as `vim` and `less`, and `Ctrl+C` work as in any terminal.
+
+- **+** opens another terminal; tabs switch between them, and × or a middle-click closes one, ending its shell and anything running in it. Closing the last terminal hides the panel.
+- Hiding the panel leaves its shells running. When a shell exits on its own, its tab stays open showing the exit code.
+- Drag the panel's top edge to resize it. Whether it is shown and its height are remembered.
+- Copy and paste with `Ctrl+Shift+C` / `Ctrl+Shift+V` or the right-click menu; plain `Ctrl+C` goes to the shell.
+- Opening another repository keeps existing terminals where they are; new terminals start in the new repository.
+- The diff is not refreshed when you run commands; press `Ctrl+R` (outside the terminal) to see what they changed.
+
+Differential itself never modifies the repository. Commands you run in the terminal can, just as in any other terminal. All shells are ended when the app closes.
+
 ## Development
 
 | Command | What it does |
@@ -105,13 +121,15 @@ src-tauri/src/diff/     diff model, unified-diff parser, intraline ranges
 src-tauri/src/changes.rs  file list, per-file diffs, file content
 src-tauri/src/files.rs  project file listing and read-only file view
 src-tauri/src/content.rs  shared size limits, binary detection, safe path joining
+src-tauri/src/terminal/ shell sessions in pseudo-terminals for the terminal panel
 src-tauri/tests/        integration tests against throwaway git repositories
 src/model/              TypeScript types generated from the Rust model (ts-rs)
 src/api/                typed wrappers around the Tauri commands
 src/rows/               diff model → flat rows for the virtualized views
 src/highlight/          Shiki syntax highlighting in a Web Worker
 src/tree/               project files → folder tree → visible rows
-src/components/         toolbar (repo and base pickers), sidebar (file list, project tree), tabs, diff and file views
+src/terminal/           xterm.js terminals and their shell sessions
+src/components/         toolbar (repo and base pickers), sidebar (file list, project tree), tabs, diff and file views, terminal panel
 ```
 
 Design and requirements live in [`openspec/`](openspec/).
