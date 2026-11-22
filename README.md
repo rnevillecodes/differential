@@ -92,8 +92,9 @@ In the Files tree:
 The terminal panel opens under the file pane with the terminal button at the right of the toolbar or ``Ctrl+` ``. Each terminal is a full interactive shell started in the open repository's root: PowerShell on Windows (PowerShell 7 when `pwsh` is installed, otherwise Windows PowerShell), your `$SHELL` as a login shell on macOS, and `$SHELL` (or `/bin/sh`) elsewhere. Colors, full-screen programs such as `vim` and `less`, and `Ctrl+C` work as in any terminal.
 
 - **+** opens another terminal; tabs switch between them, and × or a middle-click closes one, ending its shell and anything running in it. Closing the last terminal hides the panel.
-- Hiding the panel leaves its shells running. When a shell exits on its own, its tab stays open showing the exit code.
+- Hiding the panel leaves its shells running. Exiting a shell (for example with `exit`) closes its tab, like the ×.
 - Drag the panel's top edge to resize it. Whether it is shown and its height are remembered.
+- The maximize button in the panel's header makes the terminal fill the file pane's area; press it again to restore the panel's height. Combine it with `Ctrl+B` to give the terminal the whole window below the toolbar.
 - Copy and paste with `Ctrl+Shift+C` / `Ctrl+Shift+V` or the right-click menu; plain `Ctrl+C` goes to the shell.
 - Opening another repository keeps existing terminals where they are; new terminals start in the new repository.
 - The diff is not refreshed when you run commands; press `Ctrl+R` (outside the terminal) to see what they changed.
