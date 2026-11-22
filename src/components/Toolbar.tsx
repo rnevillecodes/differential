@@ -1,6 +1,6 @@
 import { useApp } from "../store";
 import { BasePicker } from "./BasePicker";
-import { SidebarIcon } from "./icons";
+import { SidebarIcon, TerminalIcon } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
@@ -11,6 +11,8 @@ export function Toolbar() {
   const setViewMode = useApp((s) => s.setViewMode);
   const sidebarOpen = useApp((s) => s.sidebarOpen);
   const toggleSidebar = useApp((s) => s.toggleSidebar);
+  const terminalOpen = useApp((s) => s.terminalOpen);
+  const toggleTerminal = useApp((s) => s.toggleTerminal);
 
   return (
     <header className="toolbar">
@@ -40,6 +42,18 @@ export function Toolbar() {
           Split
         </button>
       </div>
+
+      <button
+        type="button"
+        className="icon-button terminal-toggle"
+        onClick={toggleTerminal}
+        disabled={!repo}
+        aria-pressed={terminalOpen}
+        aria-label="Terminal"
+        title={`${terminalOpen ? "Hide" : "Show"} terminal (Ctrl+\`)`}
+      >
+        <TerminalIcon width={16} height={16} />
+      </button>
     </header>
   );
 }

@@ -117,3 +117,31 @@ fn list_refs_round_trips_through_ipc() {
     assert!(refs.contains(&json!({ "name": "main", "rev": "main", "kind": "local", "current": true })));
     assert!(refs.contains(&json!({ "name": "v1.0", "rev": "v1.0", "kind": "tag", "current": false })));
 }
+
+#[test]
+fn terminal_commands_ignore_unknown_sessions() {
+    let (_app, w) = app(InitialArgs::default());
+    assert_eq!(invoke(&w, "terminal_write", json!({ "id": 4242, "data": "ls\r" })).unwrap(), Value::Null);
+    assert_eq!(invoke(&w, "terminal_resize", json!({ "id": 4242, "cols": 80, "rows": 24 })).unwrap(), Value::Null);
+    assert_eq!(invoke(&w, "terminal_close", json!({ "id": 4242 })).unwrap(), Value::Null);
+}
+
+#[test]
+fn terminal_spawn_with_missing_directory_is_an_error_payload() {
+    let (_app, w) = app(InitialArgs::default());
+    let missing = tempfile::tempdir().unwrap().path().join("gone");
+    let err = invoke(
+        &w,
+        "terminal_spawn",
+        json!({
+            "cwd": missing,
+            "cols": 80,
+            "rows": 24,
+            "onData": "__CHANNEL__:7",
+            "onExit": "__CHANNEL__:8",
+        }),
+    )
+    .unwrap_err();
+    assert_eq!(err["kind"], "io");
+    assert!(err["message"].as_str().unwrap().contains("not a directory"), "{err}");
+}

@@ -5,6 +5,7 @@ pub mod diff;
 pub mod error;
 pub mod files;
 pub mod git;
+pub mod terminal;
 
 use commands::InitialArgs;
 
@@ -16,6 +17,7 @@ pub fn configure<R: tauri::Runtime>(
     builder
         .plugin(tauri_plugin_dialog::init())
         .manage(args)
+        .manage(commands::Terminals::default())
         .invoke_handler(tauri::generate_handler![
             commands::initial_args,
             commands::open_repo,
@@ -25,6 +27,10 @@ pub fn configure<R: tauri::Runtime>(
             commands::list_files,
             commands::view_file,
             commands::list_refs,
+            commands::terminal_spawn,
+            commands::terminal_write,
+            commands::terminal_resize,
+            commands::terminal_close,
         ])
 }
 
@@ -43,6 +49,13 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // End every terminal shell (and its programs) when the app quits.
+            if let tauri::RunEvent::Exit = event {
+                use tauri::Manager;
+                app.state::<commands::Terminals>().close_all();
+            }
+        });
 }

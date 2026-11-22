@@ -112,3 +112,39 @@ export function CollapseAllIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function PlusIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 3v10M3 8h10" />
+    </Icon>
+  );
+}
+
+/** A prompt in a window: the terminal panel. */
+export function TerminalIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+      <path d="M4.5 6.25L6.75 8 4.5 9.75M8.25 10.25h3.25" />
+    </Icon>
+  );
+}
+
+/** Arrows pointing out to the corners: maximize. */
+export function MaximizeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4M13.5 2.5L9.25 6.75M2.5 13.5l4.25-4.25" />
+    </Icon>
+  );
+}
+
+/** Arrows pointing in from the corners: restore. */
+export function RestoreIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13.5 6.5h-4v-4M2.5 9.5h4v4M9.5 6.5L14 2M6.5 9.5L2 14" />
+    </Icon>
+  );
+}

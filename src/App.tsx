@@ -3,16 +3,26 @@ import type { StoreApi } from "zustand";
 import { tauriApi } from "./api";
 import { DiffPane } from "./components/DiffPane";
 import { Sidebar } from "./components/Sidebar";
+import { TerminalPanel } from "./components/TerminalPanel";
 import { Toolbar } from "./components/Toolbar";
 import { createAppStore, StoreContext, useApp, type AppState } from "./store";
+import { isToggleKey } from "./terminal/sessions";
 
 /**
  * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O repository picker, Ctrl+\ toggle view,
  * Ctrl+B toggle sidebar,
- * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs.
+ * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs,
+ * Ctrl+` show/hide the terminal panel.
+ *
+ * While a terminal has focus every key belongs to its shell, except Ctrl+`.
  */
 export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
+  if (isToggleKey(e)) {
+    s.toggleTerminal();
+    return true;
+  }
   const target = e.target as HTMLElement | null;
+  if (target?.closest?.("[data-terminal]")) return false;
   const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
   if (e.ctrlKey && !e.altKey) {
     if (e.key === "Tab") s.cycleTab(e.shiftKey ? -1 : 1);
@@ -65,10 +75,15 @@ export default function App({ store: injected }: { store?: StoreApi<AppState> })
 
 function Main() {
   const sidebarOpen = useApp((s) => s.sidebarOpen);
+  // The file pane gives way to the terminal only while the panel is actually shown.
+  const terminalMaximized = useApp((s) => s.terminalMaximized && s.terminalOpen && s.repo !== null);
   return (
     <main className={`main${sidebarOpen ? "" : " sidebar-hidden"}`}>
       {sidebarOpen && <Sidebar />}
-      <DiffPane />
+      <div className={`workspace${terminalMaximized ? " terminal-maximized" : ""}`}>
+        <DiffPane />
+        <TerminalPanel />
+      </div>
     </main>
   );
 }
