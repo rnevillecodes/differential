@@ -174,6 +174,16 @@ export function GraphIcon(props: IconProps) {
   );
 }
 
+/** A box divided down the middle: split into side-by-side panes. */
+export function SplitIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1" />
+      <path d="M8 2.5v11" />
+    </Icon>
+  );
+}
+
 /** Arrows pointing out to the corners: maximize. */
 export function MaximizeIcon(props: IconProps) {
   return (

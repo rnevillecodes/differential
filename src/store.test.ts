@@ -639,6 +639,186 @@ describe("terminal panel state", () => {
     expect(store.getState().terminals).toHaveLength(1);
   });
 
+  /** Group invariants: no empty group, every tab in exactly one group, sizes add up, active ids consistent. */
+  function expectGroupsConsistent(s: AppState) {
+    const grouped = s.terminalGroups.flatMap((g) => g.tabs);
+    expect([...grouped].sort((a, b) => a - b)).toEqual(s.terminals.map((t) => t.id).sort((a, b) => a - b));
+    expect(new Set(grouped).size).toBe(grouped.length);
+    for (const g of s.terminalGroups) {
+      expect(g.tabs.length).toBeGreaterThan(0);
+      expect(g.tabs).toContain(g.active);
+    }
+    if (s.terminalGroups.length === 0) {
+      expect(s.activeTerminalGroup).toBeNull();
+      expect(s.activeTerminal).toBeNull();
+    } else {
+      expect(s.terminalGroups.reduce((a, g) => a + g.size, 0)).toBeCloseTo(1);
+      const active = s.terminalGroups.find((g) => g.id === s.activeTerminalGroup);
+      expect(active).toBeDefined();
+      expect(s.activeTerminal).toBe(active!.active);
+    }
+  }
+
+  const groupTabs = (s: AppState) => s.terminalGroups.map((g) => g.tabs);
+  const groupSizes = (s: AppState) => s.terminalGroups.map((g) => g.size);
+
+  it("puts the first terminal in one full-width group", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().toggleTerminal();
+    const s = store.getState();
+    expect(s.terminalGroups).toEqual([{ id: 1, tabs: [1], active: 1, size: 1 }]);
+    expect(s.activeTerminalGroup).toBe(1);
+    expectGroupsConsistent(s);
+  });
+
+  it("adds a new terminal to the given group, or the active one", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().splitTerminal(1);
+    const [a, b] = store.getState().terminalGroups.map((g) => g.id);
+    store.getState().newTerminal(a);
+    expect(groupTabs(store.getState())).toEqual([[1, 3], [2]]);
+    expect(store.getState().activeTerminalGroup).toBe(a);
+    expect(store.getState().activeTerminal).toBe(3);
+    store.getState().setActiveTerminalGroup(b);
+    store.getState().newTerminal();
+    expect(groupTabs(store.getState())).toEqual([[1, 3], [2, 4]]);
+    expect(store.getState().activeTerminal).toBe(4);
+    expectGroupsConsistent(store.getState());
+  });
+
+  it("splits a group to its right, halving its width, up to the group limit", async () => {
+    const { store, storage } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().splitTerminal(1);
+    expect(store.getState().terminals).toEqual([]); // no group to split yet
+    store.getState().newTerminal();
+    store.getState().toggleTerminal(); // hide
+    store.getState().splitTerminal(1);
+    expect(store.getState().terminalOpen).toBe(true);
+    expect(storage.data["differential.terminalOpen"]).toBe("true");
+    expect(groupTabs(store.getState())).toEqual([[1], [2]]);
+    expect(groupSizes(store.getState())).toEqual([0.5, 0.5]);
+    expect(store.getState().activeTerminal).toBe(2);
+
+    // Splitting the left group puts the new one between the two; splitting the right one halves only it.
+    store.getState().splitTerminal(1);
+    expect(groupTabs(store.getState())).toEqual([[1], [3], [2]]);
+    expect(groupSizes(store.getState())).toEqual([0.25, 0.25, 0.5]);
+    const right = store.getState().terminalGroups[2].id;
+    store.getState().splitTerminal(right);
+    expect(groupTabs(store.getState())).toEqual([[1], [3], [2], [4]]);
+    expect(groupSizes(store.getState())).toEqual([0.25, 0.25, 0.25, 0.25]);
+    expect(store.getState().activeTerminal).toBe(4);
+    expect(store.getState().activeTerminalGroup).toBe(store.getState().terminalGroups[3].id);
+    expectGroupsConsistent(store.getState());
+
+    store.getState().splitTerminal(1);
+    expect(store.getState().terminalGroups).toHaveLength(4);
+    expect(store.getState().terminals).toHaveLength(4);
+  });
+
+  it("closes tabs within their group, removing emptied groups and moving their width", async () => {
+    const { store, sessions } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal(); // 1 in A
+    store.getState().newTerminal(); // 2 in A
+    store.getState().splitTerminal(1); // 3 in B
+    store.getState().splitTerminal(store.getState().terminalGroups[1].id); // 4 in C
+    const [a, b, c] = store.getState().terminalGroups.map((g) => g.id);
+    store.getState().setActiveTerminal(1);
+    expect(store.getState().activeTerminalGroup).toBe(a);
+    expect(store.getState().terminalGroups[0].active).toBe(1);
+
+    // A neighbor tab in the same group takes over; other groups keep their tab.
+    store.getState().closeTerminal(1);
+    expect(groupTabs(store.getState())).toEqual([[2], [3], [4]]);
+    expect(store.getState().activeTerminal).toBe(2);
+    expectGroupsConsistent(store.getState());
+
+    // Closing the middle group's only tab gives its width to the left neighbor; C stays active.
+    store.getState().setActiveTerminalGroup(c);
+    store.getState().closeTerminal(3);
+    expect(sessions.close).toHaveBeenCalledWith(3);
+    expect(store.getState().terminalGroups.map((g) => g.id)).toEqual([a, c]);
+    expect(groupSizes(store.getState())).toEqual([0.75, 0.25]);
+    expect(store.getState().activeTerminalGroup).toBe(c);
+    expectGroupsConsistent(store.getState());
+    expect(b).not.toBe(c);
+
+    // The leftmost active group gives its width to the right neighbor, which becomes active.
+    store.getState().setActiveTerminalGroup(a);
+    store.getState().closeTerminal(2);
+    expect(store.getState().terminalGroups).toEqual([{ id: c, tabs: [4], active: 4, size: 1 }]);
+    expect(store.getState().activeTerminalGroup).toBe(c);
+    expect(store.getState().activeTerminal).toBe(4);
+    expect(store.getState().terminalOpen).toBe(true);
+
+    store.getState().closeTerminal(4);
+    expect(store.getState().terminalGroups).toEqual([]);
+    expect(store.getState().terminalOpen).toBe(false);
+    expectGroupsConsistent(store.getState());
+
+    // Showing the panel again starts over with one full-width group.
+    store.getState().toggleTerminal();
+    expect(store.getState().terminalGroups).toHaveLength(1);
+    expect(store.getState().terminalGroups[0].size).toBe(1);
+    expectGroupsConsistent(store.getState());
+  });
+
+  it("removes a group whose only shell exits", async () => {
+    const { store, events } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().splitTerminal(1);
+    events().onExit(1, 0);
+    expect(groupTabs(store.getState())).toEqual([[2]]);
+    expect(groupSizes(store.getState())).toEqual([1]);
+    expect(store.getState().activeTerminal).toBe(2);
+    expectGroupsConsistent(store.getState());
+  });
+
+  it("activates a tab's group when the tab is selected; ignores unknown ids", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().splitTerminal(1);
+    store.getState().newTerminal(); // 3 joins B
+    store.getState().setActiveTerminal(1);
+    expect(store.getState().activeTerminalGroup).toBe(1);
+    expect(store.getState().activeTerminal).toBe(1);
+    // B still shows tab 3.
+    expect(store.getState().terminalGroups[1].active).toBe(3);
+    store.getState().setActiveTerminalGroup(store.getState().terminalGroups[1].id);
+    expect(store.getState().activeTerminal).toBe(3);
+    store.getState().setActiveTerminal(99);
+    store.getState().setActiveTerminalGroup(99);
+    expect(store.getState().activeTerminal).toBe(3);
+    expectGroupsConsistent(store.getState());
+  });
+
+  it("normalizes group sizes and rejects a mismatched or invalid list", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().splitTerminal(1);
+    store.getState().setTerminalGroupSizes([3, 1]);
+    expect(groupSizes(store.getState())).toEqual([0.75, 0.25]);
+    store.getState().setTerminalGroupSizes([1]);
+    store.getState().setTerminalGroupSizes([1, 0]);
+    store.getState().setTerminalGroupSizes([1, NaN]);
+    expect(groupSizes(store.getState())).toEqual([0.75, 0.25]);
+  });
+
+  it("restores an open panel with a single group when a repository opens", async () => {
+    const { store } = setup({ "differential.terminalOpen": "true" });
+    await store.getState().openPath("C:/repo");
+    expect(store.getState().terminalGroups).toHaveLength(1);
+    expectGroupsConsistent(store.getState());
+  });
+
   it("persists the height with a lower bound", () => {
     const { store, storage } = setup({ "differential.terminalHeight": "nonsense" });
     expect(store.getState().terminalHeight).toBe(DEFAULT_TERMINAL_HEIGHT);

@@ -1172,6 +1172,36 @@ button:focus-visible {
   background: var(--accent);
   opacity: 0.5;
 }
+/* Terminal groups sit side by side; each takes its share (flex-grow) of the panel width. */
+.terminal-groups {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.terminal-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px; /* MIN_TERMINAL_GROUP_WIDTH */
+  min-height: 0;
+}
+.terminal-group-divider {
+  flex: none;
+  width: 4px;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--border);
+}
+.terminal-group-divider:hover,
+.terminal-group-divider:active {
+  background: var(--accent);
+  opacity: 0.6;
+}
+/* With several groups, only the active group's shown tab carries the accent. */
+.terminal-groups.split .terminal-group:not(.active) .terminal-tab.active {
+  border-top-color: var(--muted);
+  color: var(--muted);
+}
 .terminal-header {
   display: flex;
   align-items: center;

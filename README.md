@@ -110,6 +110,8 @@ In the Files tree:
 The terminal panel opens under the file pane with the terminal button at the right of the toolbar or ``Ctrl+` ``. Each terminal is a full interactive shell started in the open repository's root: PowerShell on Windows (PowerShell 7 when `pwsh` is installed, otherwise Windows PowerShell), your `$SHELL` as a login shell on macOS, and `$SHELL` (or `/bin/sh`) elsewhere. Colors, full-screen programs such as `vim` and `less`, and `Ctrl+C` work as in any terminal.
 
 - **+** opens another terminal; tabs switch between them, and × or a middle-click closes one, ending its shell and anything running in it. Closing the last terminal hides the panel.
+- The split button in a group's header opens a terminal in a new group just to its right, so terminals sit side by side (up to four groups). Each group has its own tabs, and its **+** opens the new terminal in that group. Clicking into a group makes it the active one (marked with the accent color), which is the terminal `` Ctrl+` `` focuses when the panel is shown.
+- Drag the divider between two groups to change their widths; widths last until you quit. Closing a group's last terminal removes the group and gives its space to its neighbor. After a restart the panel opens with a single group.
 - Hiding the panel leaves its shells running. Exiting a shell (for example with `exit`) closes its tab, like the ×.
 - Double-click a terminal's tab (or press `F2` on it) to rename it. `Enter` saves, `Escape` cancels, and clearing the name restores the default "Terminal N".
 - Drag the panel's top edge to resize it. Whether it is shown and its height are remembered.

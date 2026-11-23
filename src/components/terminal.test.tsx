@@ -210,6 +210,156 @@ describe("terminal panel", () => {
   });
 });
 
+describe("terminal groups", () => {
+  const groupEls = () => screen.queryAllByTestId("terminal-group");
+  const inGroup = (i: number) => within(groupEls()[i]);
+  const visibleHosts = (i: number) => inGroup(i).getAllByTestId("terminal-host").filter((h) => !h.hidden);
+
+  async function click(el: Element) {
+    await act(async () => {
+      fireEvent.click(el);
+      await flush();
+    });
+  }
+
+  async function split(i: number) {
+    await click(inGroup(i).getByRole("button", { name: "Split terminal" }));
+  }
+
+  it("splits into side-by-side groups, each with its own tabs and one visible terminal", async () => {
+    const { store, api } = await renderApp();
+    await toggleKey();
+    expect(groupEls()).toHaveLength(1);
+    expect(document.querySelector(".terminal-groups.split")).toBeNull();
+    const focus = vi.spyOn(store.getState().terminalSessions, "focus");
+
+    await split(0);
+    expect(groupEls()).toHaveLength(2);
+    expect(screen.getAllByRole("tablist", { name: "Terminals" })).toHaveLength(2);
+    expect(inGroup(0).getAllByTestId("terminal-tab")).toHaveLength(1);
+    expect(inGroup(1).getAllByTestId("terminal-tab")[0]).toHaveTextContent("Terminal 2");
+    expect(visibleHosts(0)).toHaveLength(1);
+    expect(visibleHosts(1)).toHaveLength(1);
+    expect(api.terminalSpawn).toHaveBeenCalledTimes(2);
+    expect(focus).toHaveBeenLastCalledWith(2);
+    expect(document.querySelectorAll(".terminal-group-divider")).toHaveLength(1);
+    // The panel's own controls appear once, in the last group.
+    expect(screen.getAllByRole("button", { name: "Hide terminal panel" })).toHaveLength(1);
+    expect(inGroup(1).getByRole("button", { name: "Maximize terminal panel" })).toBeInTheDocument();
+  });
+
+  it("adds a new terminal to its own group only", async () => {
+    await renderApp();
+    await toggleKey();
+    await split(0);
+    await click(inGroup(1).getByRole("button", { name: "New terminal" }));
+    expect(inGroup(0).getAllByTestId("terminal-tab")).toHaveLength(1);
+    expect(inGroup(1).getAllByTestId("terminal-tab")).toHaveLength(2);
+    expect(visibleHosts(1)).toHaveLength(1);
+    // Switching tabs in the right group leaves the left one alone.
+    await click(within(inGroup(1).getAllByTestId("terminal-tab")[0]).getByRole("tab"));
+    expect(within(inGroup(1).getAllByTestId("terminal-tab")[0]).getByRole("tab")).toHaveAttribute("aria-selected", "true");
+    expect(visibleHosts(0)).toHaveLength(1);
+  });
+
+  it("disables splitting at the group limit", async () => {
+    await renderApp();
+    await toggleKey();
+    await split(0);
+    await split(1);
+    await split(2);
+    expect(groupEls()).toHaveLength(4);
+    for (const b of screen.getAllByRole("button", { name: "Split terminal" })) expect(b).toBeDisabled();
+  });
+
+  it("removes a group when its only terminal is closed", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    await split(0);
+    await click(inGroup(1).getByRole("button", { name: "Close Terminal 2" }));
+    expect(groupEls()).toHaveLength(1);
+    expect(document.querySelector(".terminal-group-divider")).toBeNull();
+    expect(store.getState().activeTerminal).toBe(1);
+    expect(panel()).toBeVisible();
+  });
+
+  it("activates a group on focus or click and marks only the active one", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    await split(0);
+    expect(groupEls()[1]).toHaveClass("active");
+    expect(groupEls()[0]).not.toHaveClass("active");
+    expect(document.querySelector(".terminal-groups.split")).not.toBeNull();
+
+    act(() => {
+      fireEvent.focusIn(groupEls()[0].querySelector("[data-terminal]")!);
+    });
+    expect(store.getState().activeTerminalGroup).toBe(store.getState().terminalGroups[0].id);
+    expect(groupEls()[0]).toHaveClass("active");
+    expect(document.querySelectorAll(".terminal-group.active")).toHaveLength(1);
+
+    act(() => {
+      fireEvent.pointerDown(inGroup(1).getByRole("tablist"));
+    });
+    expect(store.getState().activeTerminal).toBe(2);
+    expect(groupEls()[1]).toHaveClass("active");
+  });
+
+  it("focuses the active group's terminal when the panel is shown again", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    await split(0);
+    act(() => store.getState().setActiveTerminalGroup(store.getState().terminalGroups[0].id));
+    await toggleKey(); // hide
+    const focus = vi.spyOn(store.getState().terminalSessions, "focus");
+    await toggleKey(); // show
+    expect(focus).toHaveBeenLastCalledWith(1);
+  });
+
+  it("acts on the clicked group's terminal from the context menu", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    await split(0);
+    act(() => store.getState().setActiveTerminal(1));
+    const paste = vi.spyOn(store.getState().terminalSessions, "paste");
+    fireEvent.contextMenu(groupEls()[1].querySelector("[data-terminal]")!);
+    expect(store.getState().activeTerminal).toBe(2);
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: /Paste/ }));
+    expect(paste).toHaveBeenCalledWith(2);
+  });
+
+  it("resizes adjacent groups by dragging the divider, down to the minimum width", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    await split(0);
+    const [a, b] = groupEls();
+    a.getBoundingClientRect = () => ({ width: 600 }) as DOMRect;
+    b.getBoundingClientRect = () => ({ width: 400 }) as DOMRect;
+    const divider = screen.getByRole("separator", { name: "Resize terminal groups" });
+    const sizes = () => store.getState().terminalGroups.map((g) => g.size);
+
+    act(() => {
+      fireEvent.pointerDown(divider, { button: 0, clientX: 600, pointerId: 1 });
+      fireEvent.pointerMove(divider, { clientX: 700, pointerId: 1 });
+    });
+    expect(sizes()[0]).toBeCloseTo(0.7);
+    expect(sizes()[1]).toBeCloseTo(0.3);
+    expect(a.style.flex).toMatch(/^0\.7/);
+
+    act(() => {
+      fireEvent.pointerMove(divider, { clientX: -1000, pointerId: 1 });
+    });
+    expect(sizes()[0]).toBeCloseTo(0.2);
+    expect(sizes()[1]).toBeCloseTo(0.8);
+
+    act(() => {
+      fireEvent.pointerUp(divider, { pointerId: 1 });
+      fireEvent.pointerMove(divider, { clientX: 900, pointerId: 1 });
+    });
+    expect(sizes()[0]).toBeCloseTo(0.2);
+  });
+});
+
 describe("terminal toggle in the toolbar", () => {
   it("is disabled without a repository", async () => {
     await renderApp({ open: false });
