@@ -131,6 +131,18 @@ export function TerminalIcon(props: IconProps) {
   );
 }
 
+/** A branch leaving a line of commits and merging back: the commit graph. */
+export function GraphIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="5" cy="3.5" r="1.5" />
+      <circle cx="5" cy="12.5" r="1.5" />
+      <circle cx="11" cy="8" r="1.5" />
+      <path d="M5 5v6M5 5.5c0 2 6 0.5 6 1M11 9.5c0 .5-6-1-6 1.5" />
+    </Icon>
+  );
+}
+
 /** Arrows pointing out to the corners: maximize. */
 export function MaximizeIcon(props: IconProps) {
   return (

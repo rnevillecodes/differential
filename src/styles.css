@@ -29,6 +29,16 @@
   --st-deleted: #cf222e;
   --st-renamed: #8250df;
   --st-untracked: #0969da;
+
+  /* commit graph lanes, cycled by lane */
+  --lane-0: #0969da;
+  --lane-1: #1a7f37;
+  --lane-2: #bf3989;
+  --lane-3: #9a6700;
+  --lane-4: #8250df;
+  --lane-5: #cf222e;
+  --lane-6: #1b7c83;
+  --lane-7: #bc4c00;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -58,6 +68,15 @@
     --st-deleted: #f85149;
     --st-renamed: #a371f7;
     --st-untracked: #4493f8;
+
+    --lane-0: #4493f8;
+    --lane-1: #3fb950;
+    --lane-2: #db61a2;
+    --lane-3: #d29922;
+    --lane-4: #a371f7;
+    --lane-5: #f85149;
+    --lane-6: #39c5cf;
+    --lane-7: #f0883e;
   }
 }
 
@@ -130,6 +149,12 @@ button:focus-visible {
 }
 .main.sidebar-hidden {
   grid-template-columns: 1fr;
+}
+.main.graph-open {
+  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr) auto;
+}
+.main.sidebar-hidden.graph-open {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .sidebar-toggle[aria-pressed="true"] {
   color: var(--fg);
@@ -1138,4 +1163,137 @@ button:focus-visible {
 .context-menu kbd {
   font: inherit;
   color: var(--muted);
+}
+
+/* ---- commit graph pane ---- */
+
+.graph-toggle[aria-pressed="true"] {
+  color: var(--fg);
+}
+.graph-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  /* Leave the sidebar and the file pane room even at a remembered width on a smaller window. */
+  max-width: max(240px, calc(100vw - 720px));
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+}
+.graph-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+.graph-resize:hover,
+.graph-resize:active {
+  background: var(--accent);
+  opacity: 0.5;
+}
+.graph-header {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.graph-title {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.graph-message {
+  padding: 16px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.graph-message.error {
+  color: var(--danger);
+}
+.graph-scroll {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+.commit-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.commit-row:hover {
+  background: var(--hover);
+}
+.commit-row.is-base {
+  background: var(--selected);
+}
+.commit-row:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.commit-lanes {
+  flex: none;
+  overflow: hidden;
+}
+.commit-lanes path {
+  fill: none;
+  stroke-width: 2;
+}
+.commit-lanes.clipped {
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.commit-sha {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.commit-subject {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ref-chip {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+}
+.ref-chip:hover {
+  border-color: var(--accent);
+}
+.ref-chip.local {
+  border-color: var(--lane-0);
+  color: var(--lane-0);
+}
+.ref-chip.remote {
+  color: var(--muted);
+}
+.ref-chip.tag {
+  border-style: dashed;
+  color: var(--st-modified);
 }

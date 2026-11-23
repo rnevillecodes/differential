@@ -3,6 +3,7 @@
 import { vi } from "vitest";
 import type { Api } from "../api";
 import type { ChangeSet } from "../model/ChangeSet";
+import type { CommitInfo } from "../model/CommitInfo";
 import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
 import type { Hunk } from "../model/Hunk";
@@ -68,6 +69,21 @@ export function fileDiff(hunks: Hunk[], over: Partial<FileDiff> = {}): FileDiff 
   return { fileId: 0, isBinary: false, hunks, oldNoEofNewline: false, newNoEofNewline: false, ...over };
 }
 
+/** A commit whose short SHA is its SHA and whose subject defaults to "commit <sha>". */
+export function commit(sha: string, parents: string[] = [], over: Partial<CommitInfo> = {}): CommitInfo {
+  return {
+    sha,
+    shortSha: sha,
+    parents,
+    author: "Ada",
+    date: "2026-01-02T03:04:05+00:00",
+    subject: `commit ${sha}`,
+    labels: [],
+    head: false,
+    ...over,
+  };
+}
+
 export function fakeApi(over: Partial<Api> = {}): Api {
   return {
     initialArgs: vi.fn(async () => ({ path: null, base: null })),
@@ -83,6 +99,13 @@ export function fakeApi(over: Partial<Api> = {}): Api {
       { name: "origin/main", rev: "origin/main", kind: "remote" as const, current: false },
       { name: "v1.0", rev: "v1.0", kind: "tag" as const, current: false },
     ]),
+    listCommits: vi.fn(async () => ({
+      commits: [
+        commit("abc123", ["def456"], { head: true, labels: [{ name: "main", rev: "main", kind: "local" }] }),
+        commit("def456"),
+      ],
+      hasMore: false,
+    })),
     pickFolder: vi.fn(async () => null),
     terminalSpawn: vi.fn(async () => 1),
     terminalWrite: vi.fn(async () => {}),

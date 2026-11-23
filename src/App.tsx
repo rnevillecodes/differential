@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import type { StoreApi } from "zustand";
 import { tauriApi } from "./api";
+import { CommitGraph } from "./components/CommitGraph";
 import { DiffPane } from "./components/DiffPane";
 import { Sidebar } from "./components/Sidebar";
 import { TerminalPanel } from "./components/TerminalPanel";
@@ -10,7 +11,7 @@ import { isToggleKey } from "./terminal/sessions";
 
 /**
  * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O repository picker, Ctrl+\ toggle view,
- * Ctrl+B toggle sidebar,
+ * Ctrl+B toggle sidebar, Ctrl+G toggle the commit graph pane,
  * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs,
  * Ctrl+` show/hide the terminal panel.
  *
@@ -35,6 +36,7 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
       else if (key === "o") s.setRepoPickerOpen(!s.repoPickerOpen);
       else if (key === "\\") s.toggleViewMode();
       else if (key === "b") s.toggleSidebar();
+      else if (key === "g") s.toggleGraph();
       else if (key === "w") {
         if (s.activePath !== null) s.closeTab(s.activePath);
       } else return false;
@@ -77,13 +79,15 @@ function Main() {
   const sidebarOpen = useApp((s) => s.sidebarOpen);
   // The file pane gives way to the terminal only while the panel is actually shown.
   const terminalMaximized = useApp((s) => s.terminalMaximized && s.terminalOpen && s.repo !== null);
+  const graphShown = useApp((s) => s.graphOpen && s.repo !== null);
   return (
-    <main className={`main${sidebarOpen ? "" : " sidebar-hidden"}`}>
+    <main className={`main${sidebarOpen ? "" : " sidebar-hidden"}${graphShown ? " graph-open" : ""}`}>
       {sidebarOpen && <Sidebar />}
       <div className={`workspace${terminalMaximized ? " terminal-maximized" : ""}`}>
         <DiffPane />
         <TerminalPanel />
       </div>
+      {graphShown && <CommitGraph />}
     </main>
   );
 }

@@ -43,8 +43,9 @@ fn commands_round_trip_through_ipc() {
     let repo = TestRepo::with_files(&[("a.txt", "one\ntwo\n")]);
     repo.write("a.txt", "one\nTWO\n");
     repo.write("new.txt", "fresh\n");
-    let (_app, w) = app(InitialArgs { path: Some("C:/x".into()), base: Some("main".into()) });
+    let (_app, w) = app(InitialArgs { path: Some("C:/x".into()), base: Some("main".into()), wait: true });
 
+    // `wait` is backend-only and never reaches the webview.
     let args = invoke(&w, "initial_args", json!({})).unwrap();
     assert_eq!(args, json!({ "path": "C:/x", "base": "main" }));
 
@@ -116,6 +117,29 @@ fn list_refs_round_trips_through_ipc() {
     let refs = refs.as_array().unwrap();
     assert!(refs.contains(&json!({ "name": "main", "rev": "main", "kind": "local", "current": true })));
     assert!(refs.contains(&json!({ "name": "v1.0", "rev": "v1.0", "kind": "tag", "current": false })));
+}
+
+#[test]
+fn list_commits_round_trips_through_ipc() {
+    let repo = TestRepo::with_files(&[("a.txt", "a\n")]);
+    let (_app, w) = app(InitialArgs::default());
+    let root = repo.path().to_string_lossy().to_string();
+
+    let page = invoke(&w, "list_commits", json!({ "root": root, "offset": 0, "limit": 500 })).unwrap();
+    assert_eq!(page["hasMore"], false);
+    let commit = &page["commits"][0];
+    assert_eq!(commit["subject"], "initial");
+    assert_eq!(commit["head"], true);
+    assert!(commit["shortSha"].is_string());
+    assert_eq!(commit["labels"], json!([{ "name": "main", "rev": "main", "kind": "local" }]));
+}
+
+#[test]
+fn list_commits_outside_a_repository_is_an_error_payload() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_app, w) = app(InitialArgs::default());
+    let err = invoke(&w, "list_commits", json!({ "root": dir.path(), "offset": 0, "limit": 500 })).unwrap_err();
+    assert_eq!(err["kind"], "notARepo");
 }
 
 #[test]

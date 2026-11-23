@@ -51,23 +51,29 @@ pub fn list_refs(git: &Git, root: &Path) -> Result<Vec<RefInfo>> {
     Ok(parse_refs(&String::from_utf8_lossy(&out)))
 }
 
+/// The kind and display name of a full refname, or `None` when it is not a branch or tag, or is a
+/// symbolic ref (non-empty `symref`, e.g. `origin/HEAD`) that only aliases another listed ref.
+pub(crate) fn classify_ref<'a>(full: &'a str, symref: &str) -> Option<(RefKind, &'a str)> {
+    if !symref.is_empty() {
+        return None;
+    }
+    if let Some(n) = full.strip_prefix("refs/heads/") {
+        Some((RefKind::Local, n))
+    } else if let Some(n) = full.strip_prefix("refs/remotes/") {
+        Some((RefKind::Remote, n))
+    } else if let Some(n) = full.strip_prefix("refs/tags/") {
+        Some((RefKind::Tag, n))
+    } else {
+        None
+    }
+}
+
 fn parse_refs(text: &str) -> Vec<RefInfo> {
     text.lines()
         .filter_map(|line| {
             let mut f = line.split('\0');
             let (full, short, symref, head) = (f.next()?, f.next()?, f.next()?, f.next()?);
-            if !symref.is_empty() {
-                return None;
-            }
-            let (kind, name) = if let Some(n) = full.strip_prefix("refs/heads/") {
-                (RefKind::Local, n)
-            } else if let Some(n) = full.strip_prefix("refs/remotes/") {
-                (RefKind::Remote, n)
-            } else if let Some(n) = full.strip_prefix("refs/tags/") {
-                (RefKind::Tag, n)
-            } else {
-                return None;
-            };
+            let (kind, name) = classify_ref(full, symref)?;
             Some(RefInfo {
                 name: name.to_string(),
                 rev: short.to_string(),

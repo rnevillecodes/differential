@@ -13,15 +13,19 @@ use crate::changes;
 use crate::diff::model::{ChangeSet, FileDiff, FileSummary, Side};
 use crate::error::{AppError, Result};
 use crate::files::{self, FileView};
-use crate::git::{self, Git, RefInfo, RepoInfo};
+use crate::git::{self, CommitPage, Git, RefInfo, RepoInfo};
 use crate::terminal::{TerminalExit, TerminalManager};
 
-/// Repository and base given on the command line: `differential [path] [--base <rev>]`.
+/// Arguments given on the command line: `differential [path] [--base <rev>] [--wait]`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
 #[ts(export)]
 pub struct InitialArgs {
     pub path: Option<String>,
     pub base: Option<String>,
+    /// `--wait`: stay in the foreground instead of detaching from the terminal. Backend only.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub wait: bool,
 }
 
 /// Parse launch arguments (without the program name). Relative paths resolve against `cwd`.
@@ -33,6 +37,8 @@ pub fn parse_args<I: IntoIterator<Item = String>>(args: I, cwd: &Path) -> Initia
             out.base = it.next();
         } else if let Some(v) = arg.strip_prefix("--base=") {
             out.base = Some(v.to_string());
+        } else if arg == "--wait" {
+            out.wait = true;
         } else if arg.starts_with('-') {
             // Unknown flag (e.g. passed through by the dev tooling): ignore.
         } else if out.path.is_none() {
@@ -103,6 +109,12 @@ pub async fn list_files(root: String) -> Result<Vec<String>> {
 #[tauri::command]
 pub async fn list_refs(root: String) -> Result<Vec<RefInfo>> {
     blocking(move || git::list_refs(&Git::default(), Path::new(&root))).await
+}
+
+/// One page of the commit history (all branches, remote branches, tags and `HEAD`).
+#[tauri::command]
+pub async fn list_commits(root: String, offset: usize, limit: usize) -> Result<CommitPage> {
+    blocking(move || git::list_commits(&Git::default(), Path::new(&root), offset, limit)).await
 }
 
 #[tauri::command]
@@ -180,15 +192,26 @@ mod tests {
         assert_eq!(parse_args(s(&[]), cwd), InitialArgs::default());
         assert_eq!(
             parse_args(s(&["C:/repo", "--base", "HEAD~3"]), cwd),
-            InitialArgs { path: Some("C:/repo".into()), base: Some("HEAD~3".into()) }
+            InitialArgs { path: Some("C:/repo".into()), base: Some("HEAD~3".into()), wait: false }
         );
         assert_eq!(
             parse_args(s(&["--base=main", "sub/dir"]), cwd),
-            InitialArgs { path: Some("C:/work/sub/dir".into()), base: Some("main".into()) }
+            InitialArgs { path: Some("C:/work/sub/dir".into()), base: Some("main".into()), wait: false }
         );
         assert_eq!(
             parse_args(s(&["--unknown", "-b", "v1"]), cwd),
-            InitialArgs { path: None, base: Some("v1".into()) }
+            InitialArgs { path: None, base: Some("v1".into()), wait: false }
         );
+    }
+
+    #[test]
+    fn parses_wait_flag() {
+        let cwd = Path::new("C:/work");
+        assert_eq!(parse_args(s(&["--wait"]), cwd), InitialArgs { wait: true, ..Default::default() });
+        assert_eq!(
+            parse_args(s(&["C:/repo", "--wait", "--base", "main"]), cwd),
+            InitialArgs { path: Some("C:/repo".into()), base: Some("main".into()), wait: true }
+        );
+        assert!(!parse_args(s(&["C:/repo", "--base", "main"]), cwd).wait);
     }
 }

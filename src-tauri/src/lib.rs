@@ -5,6 +5,7 @@ pub mod diff;
 pub mod error;
 pub mod files;
 pub mod git;
+pub mod launch;
 pub mod terminal;
 
 use commands::InitialArgs;
@@ -27,6 +28,7 @@ pub fn configure<R: tauri::Runtime>(
             commands::list_files,
             commands::view_file,
             commands::list_refs,
+            commands::list_commits,
             commands::terminal_spawn,
             commands::terminal_write,
             commands::terminal_resize,
@@ -38,6 +40,8 @@ pub fn configure<R: tauri::Runtime>(
 pub fn run() {
     let cwd = std::env::current_dir().unwrap_or_default();
     let args = commands::parse_args(std::env::args().skip(1), &cwd);
+    // Return the launching terminal's prompt by continuing in a background process.
+    launch::detach_if_needed(args.wait);
     configure(tauri::Builder::default(), args)
         .setup(|app| {
             // Set the window icon from an embedded image so a changed icon always
