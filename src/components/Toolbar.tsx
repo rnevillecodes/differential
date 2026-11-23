@@ -1,5 +1,6 @@
 import { useApp } from "../store";
 import { BasePicker } from "./BasePicker";
+import { GraphToggle } from "./CommitGraph";
 import { SidebarIcon, TerminalIcon } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
@@ -54,6 +55,7 @@ export function Toolbar() {
       >
         <TerminalIcon width={16} height={16} />
       </button>
+      <GraphToggle />
     </header>
   );
 }

@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { createAppStore, DEFAULT_TERMINAL_HEIGHT, MIN_TERMINAL_HEIGHT, type AppState } from "./store";
+import type { CommitPage } from "./model/CommitPage";
+import {
+  createAppStore,
+  DEFAULT_GRAPH_WIDTH,
+  DEFAULT_TERMINAL_HEIGHT,
+  GRAPH_PAGE_SIZE,
+  MAX_TERMINAL_TITLE,
+  MIN_GRAPH_WIDTH,
+  MIN_TERMINAL_HEIGHT,
+  type AppState,
+} from "./store";
 import type { TerminalSessionEvents } from "./terminal/sessions";
-import { changeSet, fakeApi, flush, memoryStorage, summary } from "./test/fixtures";
+import { changeSet, commit, fakeApi, flush, memoryStorage, summary } from "./test/fixtures";
 
 describe("app store", () => {
   it("opens the repo from launch arguments and selects the first file", async () => {
@@ -565,6 +575,21 @@ describe("terminal panel state", () => {
     expect(store.getState().terminals[0].title).toBe("Terminal 4");
   });
 
+  it("renames terminals, trimming and capping the title; blank restores the default", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    store.getState().renameTerminal(2, "  build  ");
+    expect(store.getState().terminals.map((t) => t.title)).toEqual(["Terminal 1", "build"]);
+    store.getState().renameTerminal(2, "x".repeat(MAX_TERMINAL_TITLE + 10));
+    expect(store.getState().terminals[1].title).toHaveLength(MAX_TERMINAL_TITLE);
+    store.getState().renameTerminal(2, " ");
+    expect(store.getState().terminals[1].title).toBe("Terminal 2");
+    store.getState().renameTerminal(99, "nope");
+    expect(store.getState().terminals.map((t) => t.title)).toEqual(["Terminal 1", "Terminal 2"]);
+  });
+
   it("tracks session status from the session events; a start failure keeps its tab", async () => {
     const { store, events } = setup();
     await store.getState().openPath("C:/repo");
@@ -624,3 +649,183 @@ describe("terminal panel state", () => {
     expect(store.getState().terminalHeight).toBe(MIN_TERMINAL_HEIGHT);
   });
 });
+
+describe("commit graph state", () => {
+  /** A listCommits mock whose responses are resolved by hand, in any order. */
+  function deferredCommits() {
+    const pending: { offset: number; resolve: (p: CommitPage) => void; reject: (e: unknown) => void }[] = [];
+    const listCommits = vi.fn(
+      (_root: string, offset: number) =>
+        new Promise<CommitPage>((resolve, reject) => pending.push({ offset, resolve, reject })),
+    );
+    return { listCommits, pending };
+  }
+
+  const shas = (s: AppState) => s.graph.rows.map((r) => r.commit.sha);
+
+  it("is hidden by default and toggling needs a repository", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    expect(store.getState().graphOpen).toBe(false);
+    store.getState().toggleGraph();
+    expect(store.getState().graphOpen).toBe(false);
+    await store.getState().openPath("C:/repo");
+    expect(api.listCommits).not.toHaveBeenCalled();
+  });
+
+  it("loads the first page when shown and keeps it when hidden and shown again", async () => {
+    const api = fakeApi();
+    const storage = memoryStorage();
+    const store = createAppStore(api, storage);
+    await store.getState().openPath("C:/repo");
+    store.getState().toggleGraph();
+    expect(storage.data["differential.graphOpen"]).toBe("true");
+    expect(api.listCommits).toHaveBeenCalledWith("C:/repo", 0, GRAPH_PAGE_SIZE);
+    await flush();
+    expect(shas(store.getState())).toEqual(["abc123", "def456"]);
+    expect(store.getState().graph.loading).toBe(false);
+    store.getState().toggleGraph();
+    store.getState().toggleGraph();
+    expect(api.listCommits).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores an open pane and loads it when a repository opens", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage({ "differential.graphOpen": "true", "differential.graphWidth": "420" }));
+    expect(store.getState().graphWidth).toBe(420);
+    await store.getState().openPath("C:/repo");
+    await flush();
+    expect(shas(store.getState())).toEqual(["abc123", "def456"]);
+  });
+
+  it("appends later pages, continuing the lanes", async () => {
+    const { listCommits, pending } = deferredCommits();
+    const store = createAppStore(fakeApi({ listCommits }), memoryStorage({ "differential.graphOpen": "true" }));
+    await store.getState().openPath("C:/repo");
+    pending[0].resolve({ commits: [commit("c", ["b"])], hasMore: true });
+    await flush();
+    store.getState().loadMoreCommits();
+    store.getState().loadMoreCommits(); // ignored while a page is loading
+    expect(listCommits).toHaveBeenCalledTimes(2);
+    expect(pending[1].offset).toBe(1);
+    pending[1].resolve({ commits: [commit("b", ["a"]), commit("a")], hasMore: false });
+    await flush();
+    expect(shas(store.getState())).toEqual(["c", "b", "a"]);
+    expect(store.getState().graph.rows.map((r) => r.column)).toEqual([0, 0, 0]);
+    store.getState().loadMoreCommits(); // nothing left
+    expect(listCommits).toHaveBeenCalledTimes(2);
+  });
+
+  it("reloads from the first page on refresh, dropping an older response", async () => {
+    const { listCommits, pending } = deferredCommits();
+    const store = createAppStore(fakeApi({ listCommits }), memoryStorage({ "differential.graphOpen": "true" }));
+    await store.getState().openPath("C:/repo");
+    pending[0].resolve({ commits: [commit("old")], hasMore: true });
+    await flush();
+    store.getState().loadMoreCommits();
+    const refreshed = store.getState().refresh();
+    expect(pending[2].offset).toBe(0);
+    pending[2].resolve({ commits: [commit("new", ["old"]), commit("old")], hasMore: false });
+    await refreshed;
+    await flush();
+    pending[1].resolve({ commits: [commit("stale")], hasMore: false });
+    await flush();
+    expect(shas(store.getState())).toEqual(["new", "old"]);
+  });
+
+  it("marks a hidden pane stale on refresh and reloads when shown", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().toggleGraph();
+    await flush();
+    store.getState().toggleGraph();
+    await store.getState().refresh();
+    expect(api.listCommits).toHaveBeenCalledTimes(1);
+    expect(store.getState().graph.stale).toBe(true);
+    store.getState().toggleGraph();
+    expect(api.listCommits).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the rows when another repository opens", async () => {
+    const { listCommits, pending } = deferredCommits();
+    const store = createAppStore(fakeApi({ listCommits }), memoryStorage({ "differential.graphOpen": "true" }));
+    await store.getState().openPath("C:/one");
+    pending[0].resolve({ commits: [commit("one")], hasMore: false });
+    await flush();
+    const opening = store.getState().openPath("C:/two");
+    expect(store.getState().graph.rows).toEqual([]);
+    await opening;
+    expect(listCommits).toHaveBeenLastCalledWith("C:/two", 0, GRAPH_PAGE_SIZE);
+  });
+
+  it("reports a listing error without affecting the diff", async () => {
+    const api = fakeApi({
+      listCommits: vi.fn(async () => {
+        throw { kind: "git", message: "fatal: bad object" };
+      }),
+    });
+    const store = createAppStore(api, memoryStorage({ "differential.graphOpen": "true" }));
+    await store.getState().openPath("C:/repo");
+    await flush();
+    expect(store.getState().graph.error?.message).toBe("fatal: bad object");
+    expect(store.getState().graph.loading).toBe(false);
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().changes).not.toBeNull();
+  });
+
+  it("persists the width with a lower bound", () => {
+    const storage = memoryStorage({ "differential.graphWidth": "nonsense" });
+    const store = createAppStore(fakeApi(), storage);
+    expect(store.getState().graphWidth).toBe(DEFAULT_GRAPH_WIDTH);
+    store.getState().setGraphWidth(400.4);
+    expect(store.getState().graphWidth).toBe(400);
+    expect(storage.data["differential.graphWidth"]).toBe("400");
+    store.getState().setGraphWidth(10);
+    expect(store.getState().graphWidth).toBe(MIN_GRAPH_WIDTH);
+  });
+});
+
+describe("find", () => {
+  it("opens with focus, keeps the query and match case, and closes", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    const s = () => store.getState();
+    s().openFind();
+    expect(s().findOpen).toBe(true);
+    expect(s().findFocusSeq).toBe(1);
+    s().setFindQuery("foo");
+    s().toggleFindMatchCase();
+    s().setFindStatus({ current: 1, total: 3 });
+    s().closeFind();
+    expect(s().findOpen).toBe(false);
+    expect(s().findStatus).toBeNull();
+
+    s().openFind();
+    expect(s().findQuery).toBe("foo");
+    expect(s().findMatchCase).toBe(true);
+    expect(s().findFocusSeq).toBe(2);
+    s().openFind("bar");
+    expect(s().findQuery).toBe("bar");
+  });
+
+  it("requests next and previous only while open", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    const s = () => store.getState();
+    s().findNext();
+    expect(s().findNav.seq).toBe(0);
+    s().openFind();
+    s().findNext();
+    expect(s().findNav).toEqual({ seq: 1, dir: 1 });
+    s().findPrev();
+    expect(s().findNav).toEqual({ seq: 2, dir: -1 });
+  });
+
+  it("ignores an unchanged status", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    store.getState().setFindStatus({ current: 2, total: 5 });
+    const first = store.getState().findStatus;
+    store.getState().setFindStatus({ current: 2, total: 5 });
+    expect(store.getState().findStatus).toBe(first);
+  });
+});
+

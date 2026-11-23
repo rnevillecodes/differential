@@ -62,6 +62,50 @@ describe("segments", () => {
   });
 });
 
+describe("segments with find matches", () => {
+  const tokens: LineTokens = [
+    ["const", "#d73a49", "#f97583"],
+    [" timeout = ", "#24292e", "#e1e4e8"],
+    ["30", "#005cc5", "#79b8ff"],
+    [";", "#24292e", "#e1e4e8"],
+  ];
+  const line = "const timeout = 30;";
+
+  it("cuts matches across token boundaries and keeps colours", () => {
+    const s = segments(line, tokens, null, { ranges: [{ start: 3, end: 9 }], current: null });
+    expect(s.filter((x) => x.match).map((x) => [x.text, x.light])).toEqual([
+      ["st", "#d73a49"],
+      [" tim", "#24292e"],
+    ]);
+    expect(s.map((x) => x.text).join("")).toBe(line);
+    expect(s.some((x) => x.current)).toBe(false);
+  });
+
+  it("combines matches with intraline ranges", () => {
+    const s = segments(line, tokens, [{ start: 14, end: 18 }], { ranges: [{ start: 16, end: 19 }], current: null });
+    expect(s.map((x) => [x.text, x.changed, Boolean(x.match)])).toEqual([
+      ["const", false, false],
+      [" timeout ", false, false],
+      ["= ", true, false],
+      ["30", true, true],
+      [";", false, true],
+    ]);
+  });
+
+  it("flags only the current match as current", () => {
+    const ranges = [
+      { start: 0, end: 2 },
+      { start: 6, end: 8 },
+    ];
+    const s = segments("ab cd ab", undefined, null, { ranges, current: ranges[1] });
+    expect(s.map((x) => [x.text, Boolean(x.match), Boolean(x.current)])).toEqual([
+      ["ab", true, false],
+      [" cd ", false, false],
+      ["ab", true, true],
+    ]);
+  });
+});
+
 describe("HighlightClient", () => {
   function fakeWorker() {
     const w: WorkerLike & { sent: HighlightRequest[] } = {

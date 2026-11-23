@@ -13,6 +13,7 @@ import type { FileSummary } from "./model/FileSummary";
 import type { FileView } from "./model/FileView";
 import type { RefInfo } from "./model/RefInfo";
 import type { RepoInfo } from "./model/RepoInfo";
+import { emptyLayout, layout, type GraphRow, type LayoutState } from "./graph/layout";
 import { createTerminalSessions, type TerminalSessions } from "./terminal/sessions";
 import { ancestorsOf } from "./tree/build";
 
@@ -63,6 +64,36 @@ export interface TerminalTab {
 /** Smallest terminal panel height, in pixels. */
 export const MIN_TERMINAL_HEIGHT = 120;
 export const DEFAULT_TERMINAL_HEIGHT = 260;
+/** Longest terminal tab title a rename keeps. */
+export const MAX_TERMINAL_TITLE = 60;
+
+/** Narrowest commit graph pane, in pixels. */
+export const MIN_GRAPH_WIDTH = 240;
+export const DEFAULT_GRAPH_WIDTH = 360;
+/** Commits fetched per history page. */
+export const GRAPH_PAGE_SIZE = 500;
+
+/** The loaded commit history for the graph pane. */
+export interface GraphData {
+  /** Laid-out rows, one per loaded commit, in topological order. */
+  rows: GraphRow[];
+  /** Lane state after the last loaded row, for laying out the next page. */
+  layout: LayoutState;
+  hasMore: boolean;
+  loading: boolean;
+  error: ErrorPayload | null;
+  /** The rows are missing or out of date and load from the first page when the pane is shown. */
+  stale: boolean;
+}
+
+const emptyGraph = (): GraphData => ({
+  rows: [],
+  layout: emptyLayout(),
+  hasMore: false,
+  loading: false,
+  error: null,
+  stale: true,
+});
 
 export interface AppState {
   repo: RepoInfo | null;
@@ -116,6 +147,24 @@ export interface AppState {
   /** The xterm instances and shells behind `terminals` (not reactive). */
   terminalSessions: TerminalSessions;
 
+  /** Whether the commit graph pane is shown (persisted). */
+  graphOpen: boolean;
+  /** Commit graph pane width in pixels (persisted). */
+  graphWidth: number;
+  graph: GraphData;
+
+  /** Whether the find bar is shown over the active tab. */
+  findOpen: boolean;
+  findQuery: string;
+  /** Match letter case exactly (this session only). */
+  findMatchCase: boolean;
+  /** Request for the active view to move to the next (1) or previous (-1) match; `seq` changes per request. */
+  findNav: { seq: number; dir: 1 | -1 };
+  /** Changes whenever the find field should take focus and select its text. */
+  findFocusSeq: number;
+  /** The active view's current match (1-based) and total, or null while it has not reported. */
+  findStatus: FindStatus | null;
+
   init(): Promise<void>;
   openPath(path: string, base?: string): Promise<void>;
   pickAndOpen(): Promise<void>;
@@ -160,9 +209,31 @@ export interface AppState {
   /** End a terminal's shell and remove its tab; closing the last one hides the panel. */
   closeTerminal(id: number): void;
   setActiveTerminal(id: number): void;
+  /** Label a terminal's tab; a blank title restores its default "Terminal N". */
+  renameTerminal(id: number, title: string): void;
   setTerminalHeight(height: number): void;
   /** Maximize the terminal panel over the file pane, or restore it to its height. */
   toggleTerminalMaximized(): void;
+
+  /** Show or hide the commit graph pane, loading the history if needed. No-op without a repository. */
+  toggleGraph(): void;
+  setGraphWidth(width: number): void;
+  /** Load the next page of history, unless one is loading or none remain. */
+  loadMoreCommits(): void;
+
+  /** Show the find bar and focus its field; `initialQuery` (e.g. the selection) replaces the query. */
+  openFind(initialQuery?: string): void;
+  closeFind(): void;
+  setFindQuery(query: string): void;
+  toggleFindMatchCase(): void;
+  findNext(): void;
+  findPrev(): void;
+  setFindStatus(status: FindStatus | null): void;
+}
+
+export interface FindStatus {
+  current: number;
+  total: number;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -194,6 +265,8 @@ const SIDEBAR_OPEN_KEY = "differential.sidebarOpen";
 const RECENT_REPOS_KEY = "differential.recentRepos";
 const TERMINAL_OPEN_KEY = "differential.terminalOpen";
 const TERMINAL_HEIGHT_KEY = "differential.terminalHeight";
+const GRAPH_OPEN_KEY = "differential.graphOpen";
+const GRAPH_WIDTH_KEY = "differential.graphWidth";
 const MAX_RECENT_REPOS = 20;
 
 function readRecent(storage: KeyValue): string[] {
@@ -247,6 +320,11 @@ function readHeight(storage: KeyValue): number {
   return Number.isFinite(h) && h >= MIN_TERMINAL_HEIGHT ? Math.round(h) : DEFAULT_TERMINAL_HEIGHT;
 }
 
+function readGraphWidth(storage: KeyValue): number {
+  const w = Number(storage.get(GRAPH_WIDTH_KEY));
+  return Number.isFinite(w) && w >= MIN_GRAPH_WIDTH ? Math.round(w) : DEFAULT_GRAPH_WIDTH;
+}
+
 export function createAppStore(
   api: Api,
   storage: KeyValue = browserStorage,
@@ -263,6 +341,9 @@ export function createAppStore(
   let initialized = false;
   // Terminal tab ids (and their "Terminal N" titles) are never reused.
   let terminalSeq = 0;
+  // Incremented when the history reloads from the first page or the repository changes;
+  // page responses from an older generation are dropped.
+  let graphGen = 0;
 
   return createStore<AppState>((set, get) => {
     /** Whether the project listing should be (re)loaded with the change set. */
@@ -514,6 +595,49 @@ export function createAppStore(
       set({ terminalOpen: open });
     };
 
+    /**
+     * Load a page of history: from the first page with `reset` (keeping the old rows on screen
+     * until it arrives), otherwise the page after the loaded rows.
+     */
+    const loadCommits = (reset: boolean) => {
+      const { repo, graph } = get();
+      if (!repo) return;
+      if (!reset && (graph.loading || !graph.hasMore || graph.stale)) return;
+      const gen = reset ? ++graphGen : graphGen;
+      const offset = reset ? 0 : graph.rows.length;
+      set({ graph: { ...graph, loading: true, stale: false } });
+      api.listCommits(repo.root, offset, GRAPH_PAGE_SIZE).then(
+        (page) => {
+          if (gen !== graphGen) return;
+          const current = get().graph;
+          const laid = layout(page.commits, reset ? emptyLayout() : current.layout);
+          set({
+            graph: {
+              rows: reset ? laid.rows : [...current.rows, ...laid.rows],
+              layout: laid.state,
+              hasMore: page.hasMore,
+              loading: false,
+              error: null,
+              stale: false,
+            },
+          });
+        },
+        (e) => {
+          if (gen !== graphGen) return;
+          set({ graph: { ...get().graph, loading: false, error: toErrorPayload(e) } });
+        },
+      );
+    };
+
+    /** The history may have changed: reload it now if the pane is shown, else when it is next shown. */
+    const invalidateGraph = () => {
+      if (get().graphOpen && get().repo) loadCommits(true);
+      else {
+        graphGen++;
+        set({ graph: { ...get().graph, loading: false, stale: true } });
+      }
+    };
+
     const savedMode = storage.get(VIEW_MODE_KEY);
     const savedTab = storage.get(SIDEBAR_TAB_KEY);
 
@@ -545,6 +669,15 @@ export function createAppStore(
       activeTerminal: null,
       terminalSessions,
       terminalMaximized: false,
+      graphOpen: storage.get(GRAPH_OPEN_KEY) === "true",
+      graphWidth: readGraphWidth(storage),
+      graph: emptyGraph(),
+      findOpen: false,
+      findQuery: "",
+      findMatchCase: false,
+      findNav: { seq: 0, dir: 1 },
+      findFocusSeq: 0,
+      findStatus: null,
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -562,8 +695,10 @@ export function createAppStore(
       async openPath(path, base) {
         generation++;
         refsGen++;
+        graphGen++;
         viewLatest.clear();
         set({
+          graph: emptyGraph(),
           loading: true,
           error: null,
           baseError: null,
@@ -590,6 +725,7 @@ export function createAppStore(
         );
         // The panel was left open (e.g. at the last exit): give it a terminal in this repository.
         if (get().terminalOpen && get().terminals.length === 0) get().newTerminal();
+        if (get().graphOpen) loadCommits(true);
         const refsLoaded = loadRefs(repo.root);
         await loadChanges(repo.root, base?.trim() || "HEAD", false);
         await refsLoaded;
@@ -610,6 +746,7 @@ export function createAppStore(
         const { repo, base } = get();
         if (!repo) return;
         const refsLoaded = loadRefs(repo.root);
+        invalidateGraph();
         await loadChanges(repo.root, base, true);
         await refsLoaded;
       },
@@ -741,6 +878,48 @@ export function createAppStore(
         if (get().terminals.some((t) => t.id === id)) set({ activeTerminal: id });
       },
 
+      renameTerminal(id, title) {
+        const { terminals } = get();
+        const tab = terminals.find((t) => t.id === id);
+        if (!tab) return;
+        const next = title.trim().slice(0, MAX_TERMINAL_TITLE) || `Terminal ${id}`;
+        if (next !== tab.title) set({ terminals: terminals.map((t) => (t.id === id ? { ...t, title: next } : t)) });
+      },
+
+      openFind(initialQuery) {
+        set({
+          findOpen: true,
+          findQuery: initialQuery ?? get().findQuery,
+          findFocusSeq: get().findFocusSeq + 1,
+        });
+      },
+
+      closeFind() {
+        set({ findOpen: false, findStatus: null });
+      },
+
+      setFindQuery(query) {
+        set({ findQuery: query });
+      },
+
+      toggleFindMatchCase() {
+        set({ findMatchCase: !get().findMatchCase });
+      },
+
+      findNext() {
+        if (get().findOpen) set({ findNav: { seq: get().findNav.seq + 1, dir: 1 } });
+      },
+
+      findPrev() {
+        if (get().findOpen) set({ findNav: { seq: get().findNav.seq + 1, dir: -1 } });
+      },
+
+      setFindStatus(status) {
+        const cur = get().findStatus;
+        if (cur === status || (cur && status && cur.current === status.current && cur.total === status.total)) return;
+        set({ findStatus: status });
+      },
+
       toggleTerminalMaximized() {
         set({ terminalMaximized: !get().terminalMaximized });
       },
@@ -750,6 +929,25 @@ export function createAppStore(
         if (h === get().terminalHeight) return;
         storage.set(TERMINAL_HEIGHT_KEY, String(h));
         set({ terminalHeight: h });
+      },
+
+      toggleGraph() {
+        if (!get().repo) return;
+        const open = !get().graphOpen;
+        storage.set(GRAPH_OPEN_KEY, String(open));
+        set({ graphOpen: open });
+        if (open && get().graph.stale) loadCommits(true);
+      },
+
+      setGraphWidth(width) {
+        const w = Math.max(MIN_GRAPH_WIDTH, Math.round(width));
+        if (w === get().graphWidth) return;
+        storage.set(GRAPH_WIDTH_KEY, String(w));
+        set({ graphWidth: w });
+      },
+
+      loadMoreCommits() {
+        loadCommits(false);
       },
     };
   });

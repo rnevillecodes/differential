@@ -4,6 +4,7 @@ import type { FileSummary } from "../model/FileSummary";
 import { changeAt, displayPath, useApp, type FileLoad, type ViewLoad, type ViewMode } from "../store";
 import { DiffView } from "./DiffView";
 import { FileView } from "./FileView";
+import { FindBar } from "./FindBar";
 import { LogoMark } from "./icons";
 import { TabBar, tabId, tabPanelId } from "./TabBar";
 
@@ -22,6 +23,7 @@ export function DiffPane() {
   const pickAndOpen = useApp((s) => s.pickAndOpen);
   const tabs = useApp((s) => s.tabs);
   const activePath = useApp((s) => s.activePath);
+  const findOpen = useApp((s) => s.findOpen);
 
   if (error) {
     return (
@@ -65,6 +67,7 @@ export function DiffPane() {
         {tabs.map((t) => (
           <TabPanel key={t.path} path={t.path} active={t.path === activePath} />
         ))}
+        {findOpen && activePath !== null && <FindBar />}
         {activePath === null &&
           (changes.files.length === 0 ? (
             <div className="message">
@@ -106,9 +109,9 @@ const TabPanel = memo(function TabPanel({ path, active }: { path: string; active
       inert={!active}
     >
       {file && changes ? (
-        <ChangedFile file={file} changes={changes} load={load} mode={viewMode} onLoadLarge={loadLarge} />
+        <ChangedFile file={file} changes={changes} load={load} mode={viewMode} active={active} onLoadLarge={loadLarge} />
       ) : (
-        <UnchangedFile path={path} load={view} onLoadAnyway={() => loadViewAnyway(path)} />
+        <UnchangedFile path={path} load={view} active={active} onLoadAnyway={() => loadViewAnyway(path)} />
       )}
     </div>
   );
@@ -119,12 +122,14 @@ function ChangedFile({
   changes,
   load,
   mode,
+  active,
   onLoadLarge,
 }: {
   file: FileSummary;
   changes: ChangeSet;
   load: FileLoad | undefined;
   mode: ViewMode;
+  active: boolean;
   onLoadLarge: (id: number) => void;
 }) {
   const path = displayPath(file);
@@ -179,6 +184,7 @@ function ChangedFile({
         oldContent={load.oldContent}
         newContent={load.newContent}
         mode={mode}
+        active={active}
       />
     );
   }
@@ -204,7 +210,17 @@ const formatSize = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 
 /** An unchanged file opened from the project tree. */
-function UnchangedFile({ path, load, onLoadAnyway }: { path: string; load: ViewLoad | undefined; onLoadAnyway: () => void }) {
+function UnchangedFile({
+  path,
+  load,
+  active,
+  onLoadAnyway,
+}: {
+  path: string;
+  load: ViewLoad | undefined;
+  active: boolean;
+  onLoadAnyway: () => void;
+}) {
   let body: React.ReactNode;
   switch (load?.status) {
     case undefined:
@@ -212,7 +228,7 @@ function UnchangedFile({ path, load, onLoadAnyway }: { path: string; load: ViewL
       body = <div className="message">Loading…</div>;
       break;
     case "ready":
-      body = <FileView key={path} path={path} content={load.content} />;
+      body = <FileView key={path} path={path} content={load.content} active={active} />;
       break;
     case "binary":
       body = (

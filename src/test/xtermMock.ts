@@ -52,6 +52,9 @@ export class FakeTerminal {
   hasSelection() {
     return this.selection.length > 0;
   }
+  clearSelection() {
+    this.selection = "";
+  }
   attachCustomKeyEventHandler(h: (e: KeyboardEvent) => boolean) {
     this.keyHandler = h;
   }

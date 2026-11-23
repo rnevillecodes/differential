@@ -3,6 +3,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ChangeSet } from "../model/ChangeSet";
+import type { CommitPage } from "../model/CommitPage";
 import type { ErrorPayload } from "../model/ErrorPayload";
 import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
@@ -30,6 +31,8 @@ export interface Api {
   viewFile(root: string, path: string, force: boolean): Promise<FileView>;
   /** Local branches, remote-tracking branches and tags, most recent first. */
   listRefs(root: string): Promise<RefInfo[]>;
+  /** One page of the commit history (all branches, remote branches, tags and HEAD), topological order. */
+  listCommits(root: string, offset: number, limit: number): Promise<CommitPage>;
   pickFolder(): Promise<string | null>;
   /**
    * Start the user's shell in `cwd` in a `cols`×`rows` pseudo-terminal. `onData` receives raw
@@ -65,6 +68,7 @@ export const tauriApi: Api = {
   listFiles: (root) => invoke("list_files", { root }),
   viewFile: (root, path, force) => invoke("view_file", { root, path, force }),
   listRefs: (root) => invoke("list_refs", { root }),
+  listCommits: (root, offset, limit) => invoke("list_commits", { root, offset, limit }),
   pickFolder: async () => {
     const picked = await open({ directory: true, multiple: false, title: "Open repository" });
     return typeof picked === "string" ? picked : null;

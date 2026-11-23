@@ -128,13 +128,16 @@ describe("terminal sessions", () => {
     const term = FakeTerminal.instances[0];
     expect(term.keyHandler!(key("Backquote"))).toBe(false);
     expect(term.keyHandler!(key("KeyR"))).toBe(true);
-    expect(term.keyHandler!(key("KeyC"))).toBe(true); // plain Ctrl+C goes to the shell
+    expect(term.keyHandler!(key("KeyC"))).toBe(true); // Ctrl+C without a selection goes to the shell
+    expect(writeText).not.toHaveBeenCalled();
 
     term.selection = "chosen";
-    expect(term.keyHandler!(key("KeyC", { shiftKey: true }))).toBe(false);
+    expect(term.keyHandler!(key("KeyC"))).toBe(false);
     expect(writeText).toHaveBeenCalledWith("chosen");
+    expect(term.selection).toBe(""); // cleared, so the next Ctrl+C interrupts
+    expect(term.keyHandler!(key("KeyC"))).toBe(true);
 
-    expect(term.keyHandler!(key("KeyV", { shiftKey: true }))).toBe(false);
+    expect(term.keyHandler!(key("KeyV"))).toBe(false);
     await flush();
     expect(term.pasted).toEqual(["pasted"]);
   });

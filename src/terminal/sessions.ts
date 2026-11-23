@@ -138,11 +138,20 @@ export function createTerminalSessions(api: Api, events: TerminalSessionEvents):
 
     term.attachCustomKeyEventHandler((e) => {
       if (isToggleKey(e)) return false; // handled by the app's shortcut listener
-      if (e.ctrlKey && e.shiftKey && !e.altKey && (e.code === "KeyC" || e.code === "KeyV")) {
+      const plainCtrl = e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
+      // Ctrl+C copies when text is selected; otherwise it goes to the shell as an interrupt.
+      if (plainCtrl && e.code === "KeyC" && term.hasSelection()) {
         if (e.type === "keydown") {
           e.preventDefault();
-          if (e.code === "KeyC") copy(entry);
-          else paste(entry);
+          copy(entry);
+          term.clearSelection();
+        }
+        return false;
+      }
+      if (plainCtrl && e.code === "KeyV") {
+        if (e.type === "keydown") {
+          e.preventDefault();
+          paste(entry);
         }
         return false;
       }

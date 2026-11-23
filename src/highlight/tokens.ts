@@ -12,13 +12,31 @@ export interface Segment {
   dark?: string;
   /** Inside an intraline (word-level) change range. */
   changed: boolean;
+  /** Inside a find match (set only when true). */
+  match?: true;
+  /** Inside the current find match (set only when true). */
+  current?: true;
 }
+
+/** Find matches to mark on a line: all of its match ranges and the current one, if on this line. */
+export interface FindRanges {
+  ranges: Range[];
+  current: Range | null;
+}
+
+const inside = (ranges: Range[], at: number) => ranges.some((r) => at >= r.start && at < r.end);
 
 /**
  * Split a line into styled segments. Tokens are used only if they spell out exactly the
- * line's text (a trailing `\r` is ignored); otherwise the line is plain.
+ * line's text (a trailing `\r` is ignored); otherwise the line is plain. Segments are cut
+ * at the edges of intraline ranges and find ranges, and flagged accordingly.
  */
-export function segments(text: string, tokens: LineTokens | undefined, intraline: Range[] | null): Segment[] {
+export function segments(
+  text: string,
+  tokens: LineTokens | undefined,
+  intraline: Range[] | null,
+  find?: FindRanges | null,
+): Segment[] {
   const visible = text.endsWith("\r") ? text.slice(0, -1) : text;
   let base: Segment[];
   if (tokens && tokens.map((t) => t[0]).join("") === visible) {
@@ -26,27 +44,28 @@ export function segments(text: string, tokens: LineTokens | undefined, intraline
   } else {
     base = [{ text: visible, changed: false }];
   }
-  if (!intraline || intraline.length === 0) return base;
+  const changed = intraline ?? [];
+  const matches = find?.ranges ?? [];
+  const current = find?.current ? [find.current] : [];
+  if (changed.length === 0 && matches.length === 0 && current.length === 0) return base;
 
-  // Cut segments at range boundaries and flag the parts inside ranges.
+  // Every position where some flag may change, in order.
+  const cuts = [...new Set([...changed, ...matches, ...current].flatMap((r) => [r.start, r.end]))].sort((a, b) => a - b);
   const out: Segment[] = [];
   let pos = 0;
   for (const seg of base) {
-    let offset = 0;
-    while (offset < seg.text.length) {
-      const at = pos + offset;
-      const inRange = intraline.find((r) => at >= r.start && at < r.end);
-      let end: number;
-      if (inRange) {
-        end = Math.min(inRange.end, pos + seg.text.length);
-      } else {
-        const next = intraline.filter((r) => r.start > at).reduce((m, r) => Math.min(m, r.start), Infinity);
-        end = Math.min(next, pos + seg.text.length);
-      }
-      out.push({ ...seg, text: seg.text.slice(offset, end - pos), changed: Boolean(inRange) });
-      offset = end - pos;
+    const segEnd = pos + seg.text.length;
+    let at = pos;
+    while (at < segEnd) {
+      const next = cuts.find((c) => c > at);
+      const end = next === undefined ? segEnd : Math.min(next, segEnd);
+      const part: Segment = { ...seg, text: seg.text.slice(at - pos, end - pos), changed: inside(changed, at) };
+      if (inside(matches, at) || inside(current, at)) part.match = true;
+      if (inside(current, at)) part.current = true;
+      out.push(part);
+      at = end;
     }
-    pos += seg.text.length;
+    pos = segEnd;
   }
   return out;
 }
