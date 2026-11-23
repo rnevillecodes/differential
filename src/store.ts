@@ -62,6 +62,25 @@ export interface TerminalTab {
   status: TerminalStatus;
 }
 
+/**
+ * A group of terminal tabs shown side by side with the other groups in the terminal panel.
+ * Groups are never empty; `tabs` holds ids from `terminals`.
+ */
+export interface TerminalGroup {
+  id: number;
+  /** Tab ids in display order. */
+  tabs: number[];
+  /** The tab this group shows. */
+  active: number;
+  /** Share of the panel width; the sizes of all groups add up to 1. */
+  size: number;
+}
+
+/** Most terminal groups the panel holds side by side. */
+export const MAX_TERMINAL_GROUPS = 4;
+/** Narrowest a terminal group can be dragged, in pixels. */
+export const MIN_TERMINAL_GROUP_WIDTH = 200;
+
 /** Smallest terminal panel height, in pixels. */
 export const MIN_TERMINAL_HEIGHT = 120;
 export const DEFAULT_TERMINAL_HEIGHT = 260;
@@ -159,7 +178,11 @@ export interface AppState {
   terminalMaximized: boolean;
   /** Terminal tabs, in display order. */
   terminals: TerminalTab[];
+  /** The active group's shown tab: the terminal that gets the keyboard. */
   activeTerminal: number | null;
+  /** Terminal groups, left to right (this session only). */
+  terminalGroups: TerminalGroup[];
+  activeTerminalGroup: number | null;
   /** The xterm instances and shells behind `terminals` (not reactive). */
   terminalSessions: TerminalSessions;
 
@@ -227,11 +250,20 @@ export interface AppState {
 
   /** Show or hide the terminal panel; showing an empty panel starts a terminal. No-op without a repository. */
   toggleTerminal(): void;
-  /** Open a new terminal in the current repository's root and show it. */
-  newTerminal(): void;
-  /** End a terminal's shell and remove its tab; closing the last one hides the panel. */
+  /** Open a new terminal in the current repository's root, in `groupId` or the active group, and show it. */
+  newTerminal(groupId?: number): void;
+  /** Open a new terminal in a new group right of `groupId`, taking half its width. No-op at the group limit. */
+  splitTerminal(groupId: number): void;
+  /**
+   * End a terminal's shell and remove its tab; an emptied group is removed (its width going to a neighbor),
+   * and closing the last terminal hides the panel.
+   */
   closeTerminal(id: number): void;
+  /** Show a terminal in its group and make that group active. */
   setActiveTerminal(id: number): void;
+  setActiveTerminalGroup(groupId: number): void;
+  /** Set every group's share of the panel width, left to right; normalized to add up to 1. */
+  setTerminalGroupSizes(sizes: number[]): void;
   /** Label a terminal's tab; a blank title restores its default "Terminal N". */
   renameTerminal(id: number, title: string): void;
   setTerminalHeight(height: number): void;
@@ -372,6 +404,7 @@ export function createAppStore(
   let initialized = false;
   // Terminal tab ids (and their "Terminal N" titles) are never reused.
   let terminalSeq = 0;
+  let terminalGroupSeq = 0;
   // Incremented when the history reloads from the first page or the repository changes;
   // page responses from an older generation are dropped.
   let graphGen = 0;
@@ -621,6 +654,11 @@ export function createAppStore(
       onFailed: (id, message) => setTerminalStatus(id, { kind: "failed", message }),
     });
 
+    const newTerminalTab = (cwd: string): TerminalTab => {
+      const id = ++terminalSeq;
+      return { id, title: `Terminal ${id}`, cwd, status: { kind: "starting" } };
+    };
+
     const setTerminalOpen = (open: boolean) => {
       storage.set(TERMINAL_OPEN_KEY, String(open));
       set({ terminalOpen: open });
@@ -727,6 +765,8 @@ export function createAppStore(
       terminalHeight: readHeight(storage),
       terminals: [],
       activeTerminal: null,
+      terminalGroups: [],
+      activeTerminalGroup: null,
       terminalSessions,
       terminalMaximized: false,
       graphOpen: storage.get(GRAPH_OPEN_KEY) === "true",
@@ -934,29 +974,107 @@ export function createAppStore(
         if (open && get().terminals.length === 0) get().newTerminal();
       },
 
-      newTerminal() {
-        const { repo, terminals } = get();
+      newTerminal(groupId) {
+        const { repo, terminals, terminalGroups, activeTerminalGroup } = get();
         if (!repo) return;
-        const id = ++terminalSeq;
-        const tab: TerminalTab = { id, title: `Terminal ${id}`, cwd: repo.root, status: { kind: "starting" } };
-        set({ terminals: [...terminals, tab], activeTerminal: id });
+        const tab = newTerminalTab(repo.root);
+        const target =
+          terminalGroups.find((g) => g.id === groupId) ??
+          terminalGroups.find((g) => g.id === activeTerminalGroup) ??
+          terminalGroups[0];
+        const groups = target
+          ? terminalGroups.map((g) => (g === target ? { ...g, tabs: [...g.tabs, tab.id], active: tab.id } : g))
+          : [{ id: ++terminalGroupSeq, tabs: [tab.id], active: tab.id, size: 1 }];
+        set({
+          terminals: [...terminals, tab],
+          terminalGroups: groups,
+          activeTerminalGroup: target ? target.id : groups[0].id,
+          activeTerminal: tab.id,
+        });
+        if (!get().terminalOpen) setTerminalOpen(true);
+      },
+
+      splitTerminal(groupId) {
+        const { repo, terminals, terminalGroups } = get();
+        if (!repo || terminalGroups.length >= MAX_TERMINAL_GROUPS) return;
+        const i = terminalGroups.findIndex((g) => g.id === groupId);
+        if (i < 0) return;
+        const tab = newTerminalTab(repo.root);
+        const source = terminalGroups[i];
+        const half = source.size / 2;
+        const group: TerminalGroup = { id: ++terminalGroupSeq, tabs: [tab.id], active: tab.id, size: half };
+        const groups = terminalGroups.map((g) => (g === source ? { ...g, size: half } : g));
+        groups.splice(i + 1, 0, group);
+        set({
+          terminals: [...terminals, tab],
+          terminalGroups: groups,
+          activeTerminalGroup: group.id,
+          activeTerminal: tab.id,
+        });
         if (!get().terminalOpen) setTerminalOpen(true);
       },
 
       closeTerminal(id) {
-        const { terminals, activeTerminal } = get();
-        const i = terminals.findIndex((t) => t.id === id);
-        if (i < 0) return;
+        const { terminals, terminalGroups, activeTerminalGroup } = get();
+        if (!terminals.some((t) => t.id === id)) return;
         terminalSessions.close(id);
         const rest = terminals.filter((t) => t.id !== id);
-        const next =
-          activeTerminal !== id ? activeTerminal : (rest[Math.min(i, rest.length - 1)]?.id ?? null);
-        set({ terminals: rest, activeTerminal: next });
+        let groups = terminalGroups;
+        let activeGroup = activeTerminalGroup;
+        const gi = terminalGroups.findIndex((g) => g.tabs.includes(id));
+        if (gi >= 0) {
+          const group = terminalGroups[gi];
+          if (group.tabs.length > 1) {
+            // Stay in the same group: the tab that took the closed one's place, or the new last one.
+            const j = group.tabs.indexOf(id);
+            const tabs = group.tabs.filter((t) => t !== id);
+            const active = group.active !== id ? group.active : tabs[Math.min(j, tabs.length - 1)];
+            groups = terminalGroups.map((g) => (g === group ? { ...g, tabs, active } : g));
+          } else {
+            // The group empties: remove it and give its width to the left neighbor (right for the leftmost).
+            groups = terminalGroups.filter((g) => g !== group);
+            const ni = gi > 0 ? gi - 1 : 0;
+            const neighbor = groups[ni];
+            if (neighbor) {
+              groups = groups.map((g, k) => (k === ni ? { ...g, size: g.size + group.size } : g));
+              if (activeGroup === group.id) activeGroup = neighbor.id;
+            } else {
+              activeGroup = null;
+            }
+          }
+        }
+        set({
+          terminals: rest,
+          terminalGroups: groups,
+          activeTerminalGroup: activeGroup,
+          activeTerminal: groups.find((g) => g.id === activeGroup)?.active ?? null,
+        });
         if (rest.length === 0) setTerminalOpen(false);
       },
 
       setActiveTerminal(id) {
-        if (get().terminals.some((t) => t.id === id)) set({ activeTerminal: id });
+        const { terminalGroups, activeTerminal, activeTerminalGroup } = get();
+        const group = terminalGroups.find((g) => g.tabs.includes(id));
+        if (!group || (activeTerminal === id && activeTerminalGroup === group.id)) return;
+        set({
+          terminalGroups: terminalGroups.map((g) => (g === group ? { ...g, active: id } : g)),
+          activeTerminalGroup: group.id,
+          activeTerminal: id,
+        });
+      },
+
+      setActiveTerminalGroup(groupId) {
+        const { terminalGroups, activeTerminalGroup } = get();
+        const group = terminalGroups.find((g) => g.id === groupId);
+        if (!group || activeTerminalGroup === groupId) return;
+        set({ activeTerminalGroup: groupId, activeTerminal: group.active });
+      },
+
+      setTerminalGroupSizes(sizes) {
+        const { terminalGroups } = get();
+        if (sizes.length !== terminalGroups.length || !sizes.every((s) => Number.isFinite(s) && s > 0)) return;
+        const total = sizes.reduce((a, b) => a + b, 0);
+        set({ terminalGroups: terminalGroups.map((g, i) => ({ ...g, size: sizes[i] / total })) });
       },
 
       renameTerminal(id, title) {
