@@ -1,7 +1,7 @@
 import { useApp } from "../store";
 import { BasePicker } from "./BasePicker";
 import { GraphToggle } from "./CommitGraph";
-import { SidebarIcon, TerminalIcon } from "./icons";
+import { MoonIcon, SidebarIcon, SunIcon, TerminalIcon } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
@@ -14,6 +14,9 @@ export function Toolbar() {
   const toggleSidebar = useApp((s) => s.toggleSidebar);
   const terminalOpen = useApp((s) => s.terminalOpen);
   const toggleTerminal = useApp((s) => s.toggleTerminal);
+  const theme = useApp((s) => s.theme);
+  const toggleTheme = useApp((s) => s.toggleTheme);
+  const nextTheme = theme === "dark" ? "light" : "dark";
 
   return (
     <header className="toolbar">
@@ -56,6 +59,15 @@ export function Toolbar() {
         <TerminalIcon width={16} height={16} />
       </button>
       <GraphToggle />
+      <button
+        type="button"
+        className="icon-button theme-toggle"
+        onClick={toggleTheme}
+        aria-label={`Switch to ${nextTheme} mode`}
+        title={`Switch to ${nextTheme} mode`}
+      >
+        {theme === "dark" ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
+      </button>
     </header>
   );
 }

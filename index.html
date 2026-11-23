@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Differential</title>
+    <script>
+      // Apply the saved (or OS) theme before first paint; the app store takes over after.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem("differential.theme"); } catch (e) {}
+        if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+        document.documentElement.style.colorScheme = t;
+      })();
+    </script>
   </head>
 
   <body>

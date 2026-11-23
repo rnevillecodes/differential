@@ -3,6 +3,7 @@ import type { TerminalExit } from "../model/TerminalExit";
 import { fakeApi, flush } from "../test/fixtures";
 import { FakeTerminal } from "../test/xtermMock";
 import { createTerminalSessions, isToggleKey, type TerminalSessionEvents } from "./sessions";
+import { applyTheme } from "./theme";
 
 function setup(spawn?: () => Promise<number>) {
   let onData: (b: Uint8Array) => void = () => {};
@@ -32,6 +33,18 @@ const key = (code: string, over: Partial<KeyboardEventInit> = {}) =>
   new KeyboardEvent("keydown", { code, ctrlKey: true, ...over });
 
 describe("terminal sessions", () => {
+  it("recolours open terminals when the app theme changes", async () => {
+    const { sessions, host } = setup();
+    applyTheme("light");
+    sessions.attach(1, "C:/repo", host);
+    const term = FakeTerminal.instances[0];
+    expect(term.options.theme?.red).toBe("#cf222e");
+    applyTheme("dark");
+    await flush(); // MutationObserver callbacks run as microtasks
+    expect(term.options.theme?.red).toBe("#ff7b72");
+    delete document.documentElement.dataset.theme;
+  });
+
   it("spawns once per tab, in the given directory, at the terminal's size", async () => {
     const { api, sessions, host, events } = setup();
     sessions.attach(1, "C:/repo", host);

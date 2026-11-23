@@ -15,6 +15,7 @@ import type { RefInfo } from "./model/RefInfo";
 import type { RepoInfo } from "./model/RepoInfo";
 import { emptyLayout, layout, type GraphRow, type LayoutState } from "./graph/layout";
 import { createTerminalSessions, type TerminalSessions } from "./terminal/sessions";
+import { applyTheme, DARK_QUERY, prefersDark, type Theme } from "./terminal/theme";
 import { ancestorsOf } from "./tree/build";
 
 export type ViewMode = "unified" | "split";
@@ -114,6 +115,8 @@ export interface AppState {
   sidebarTab: SidebarTab;
   /** Whether the sidebar is shown (persisted). */
   sidebarOpen: boolean;
+  /** Light or dark colour theme: the saved choice, else the OS preference. */
+  theme: Theme;
   /** Every project file, once the Files tab has been opened for this repo. */
   projectFiles: string[] | null;
   filesError: ErrorPayload | null;
@@ -180,6 +183,8 @@ export interface AppState {
 
   setSidebarTab(tab: SidebarTab): void;
   toggleSidebar(): void;
+  /** Switch between light and dark, remembering the choice. */
+  toggleTheme(): void;
   toggleFolder(path: string): void;
   setFolderExpanded(path: string, open: boolean): void;
   /** Collapse every folder in the project tree. */
@@ -267,6 +272,8 @@ const TERMINAL_OPEN_KEY = "differential.terminalOpen";
 const TERMINAL_HEIGHT_KEY = "differential.terminalHeight";
 const GRAPH_OPEN_KEY = "differential.graphOpen";
 const GRAPH_WIDTH_KEY = "differential.graphWidth";
+/** Also read by the pre-paint script in index.html. */
+const THEME_KEY = "differential.theme";
 const MAX_RECENT_REPOS = 20;
 
 function readRecent(storage: KeyValue): string[] {
@@ -640,6 +647,19 @@ export function createAppStore(
 
     const savedMode = storage.get(VIEW_MODE_KEY);
     const savedTab = storage.get(SIDEBAR_TAB_KEY);
+    const savedTheme = storage.get(THEME_KEY);
+    const initialTheme: Theme =
+      savedTheme === "dark" || savedTheme === "light" ? savedTheme : prefersDark() ? "dark" : "light";
+    applyTheme(initialTheme);
+    // Until the user picks a theme, follow the OS preference as it changes.
+    if (savedTheme !== "dark" && savedTheme !== "light" && typeof window.matchMedia === "function") {
+      window.matchMedia(DARK_QUERY).addEventListener?.("change", (e) => {
+        if (storage.get(THEME_KEY)) return;
+        const theme: Theme = e.matches ? "dark" : "light";
+        applyTheme(theme);
+        set({ theme });
+      });
+    }
 
     return {
       repo: null,
@@ -653,6 +673,7 @@ export function createAppStore(
       files: {},
       sidebarTab: savedTab === "files" ? "files" : "changes",
       sidebarOpen: storage.get(SIDEBAR_OPEN_KEY) !== "false",
+      theme: initialTheme,
       projectFiles: null,
       filesError: null,
       refs: null,
@@ -784,6 +805,13 @@ export function createAppStore(
         const open = !get().sidebarOpen;
         storage.set(SIDEBAR_OPEN_KEY, String(open));
         set({ sidebarOpen: open });
+      },
+
+      toggleTheme() {
+        const theme: Theme = get().theme === "dark" ? "light" : "dark";
+        storage.set(THEME_KEY, theme);
+        applyTheme(theme);
+        set({ theme });
       },
 
       toggleFolder(path) {

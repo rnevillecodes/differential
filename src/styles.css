@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
   --row-h: 20px;
@@ -45,46 +45,46 @@
   --lane-7: #bc4c00;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --fg: #e6edf3;
-    --muted: #8d96a0;
-    --border: #30363d;
-    --panel: #161b22;
-    --hover: #1f2630;
-    --selected: #1c3354;
-    --accent: #4493f8;
-    --danger: #f85149;
+/* Dark theme: `data-theme` on <html> is set from the saved choice or the OS preference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --muted: #8d96a0;
+  --border: #30363d;
+  --panel: #161b22;
+  --hover: #1f2630;
+  --selected: #1c3354;
+  --accent: #4493f8;
+  --danger: #f85149;
 
-    --add-bg: #12261e;
-    --add-gutter: #1a3a2a;
-    --add-word: #2e6b3f;
-    --find-bg: #bb800980;
-    --find-current: #f0883ecc;
-    --find-outline: #ffa657;
-    --rem-bg: #2a1517;
-    --rem-gutter: #42201f;
-    --rem-word: #8e2f2f;
-    --gap-bg: #121d2f;
-    --gap-fg: #8d96a0;
-    --filler: repeating-linear-gradient(135deg, #161b22 0 4px, #1b2129 4px 8px);
+  --add-bg: #12261e;
+  --add-gutter: #1a3a2a;
+  --add-word: #2e6b3f;
+  --find-bg: #bb800980;
+  --find-current: #f0883ecc;
+  --find-outline: #ffa657;
+  --rem-bg: #2a1517;
+  --rem-gutter: #42201f;
+  --rem-word: #8e2f2f;
+  --gap-bg: #121d2f;
+  --gap-fg: #8d96a0;
+  --filler: repeating-linear-gradient(135deg, #161b22 0 4px, #1b2129 4px 8px);
 
-    --st-added: #3fb950;
-    --st-modified: #d29922;
-    --st-deleted: #f85149;
-    --st-renamed: #a371f7;
-    --st-untracked: #4493f8;
+  --st-added: #3fb950;
+  --st-modified: #d29922;
+  --st-deleted: #f85149;
+  --st-renamed: #a371f7;
+  --st-untracked: #4493f8;
 
-    --lane-0: #4493f8;
-    --lane-1: #3fb950;
-    --lane-2: #db61a2;
-    --lane-3: #d29922;
-    --lane-4: #a371f7;
-    --lane-5: #f85149;
-    --lane-6: #39c5cf;
-    --lane-7: #f0883e;
-  }
+  --lane-0: #4493f8;
+  --lane-1: #3fb950;
+  --lane-2: #db61a2;
+  --lane-3: #d29922;
+  --lane-4: #a371f7;
+  --lane-5: #f85149;
+  --lane-6: #39c5cf;
+  --lane-7: #f0883e;
 }
 
 * {
@@ -1025,9 +1025,7 @@ button:focus-visible {
 .diff-scroll:focus { outline: none; }
 
 .tok { color: var(--l); }
-@media (prefers-color-scheme: dark) {
-  .tok { color: var(--d); }
-}
+:root[data-theme="dark"] .tok { color: var(--d); }
 
 .row.gap {
   background: var(--gap-bg);

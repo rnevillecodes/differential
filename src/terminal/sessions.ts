@@ -8,7 +8,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITerminalOptions } from "@xterm/xterm";
 import { toErrorPayload, type Api } from "../api";
 import type { TerminalExit } from "../model/TerminalExit";
-import { DARK_QUERY, terminalFont, terminalTheme } from "./theme";
+import { terminalFont, terminalTheme } from "./theme";
 
 /** Lifecycle notifications, applied to the store. */
 export interface TerminalSessionEvents {
@@ -54,10 +54,12 @@ export function isToggleKey(e: KeyboardEvent): boolean {
 export function createTerminalSessions(api: Api, events: TerminalSessionEvents): TerminalSessions {
   const entries = new Map<number, Entry>();
 
-  if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-    window.matchMedia(DARK_QUERY).addEventListener?.("change", (e) => {
-      for (const entry of entries.values()) entry.term.options.theme = terminalTheme(e.matches);
-    });
+  // Recolour open terminals whenever the app theme (the `data-theme` attribute) changes.
+  if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
+    new MutationObserver(() => {
+      const theme = terminalTheme();
+      for (const entry of entries.values()) entry.term.options.theme = theme;
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   }
 
   const fitNow = (entry: Entry) => {
