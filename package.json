@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit",
-    "perf-repo": "node scripts/make-perf-repo.mjs"
+    "perf-repo": "node scripts/make-perf-repo.mjs",
+    "publish-build": "node scripts/publish-build.mjs"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.26",
