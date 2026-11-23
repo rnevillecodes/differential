@@ -906,6 +906,8 @@ button:focus-visible {
   width: 100%;
   display: flex;
   white-space: pre;
+  /* Rows have a fixed size: lay out and paint each one on its own. */
+  contain: strict;
 }
 .gutter {
   display: flex;

@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import { highlighter } from "../highlight/client";
 import { segments, type LineTokens } from "../highlight/tokens";
 import type { FileDiff } from "../model/FileDiff";
@@ -18,6 +18,8 @@ import {
 import { TokenSpans } from "./TokenSpans";
 
 export const ROW_HEIGHT = 20;
+/** Rows rendered beyond each edge of the viewport. */
+export const OVERSCAN = 10;
 
 interface Props {
   file: FileSummary;
@@ -60,10 +62,16 @@ export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: 
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 30,
+    overscan: OVERSCAN,
+    // Render scrolled-in rows in React's normal update instead of a synchronous flush per scroll event.
+    useFlushSync: false,
   });
 
-  const onExpand = (gap: Gap, how: "all" | "up" | "down") => setExpansion((s) => expandGap(s, gap, how));
+  // Stable, so memoized rows are not re-rendered on every scroll.
+  const onExpand = useCallback(
+    (gap: Gap, how: "all" | "up" | "down") => setExpansion((s) => expandGap(s, gap, how)),
+    [],
+  );
   const contentWidth = `calc(${maxColumns}ch + 24px)`;
 
   return (

@@ -2,7 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { highlighter } from "../highlight/client";
 import { segments, type LineTokens } from "../highlight/tokens";
-import { ROW_HEIGHT } from "./DiffView";
+import { OVERSCAN, ROW_HEIGHT } from "./DiffView";
 import { TokenSpans } from "./TokenSpans";
 
 /** Read-only, virtualized view of a whole (unchanged) file with line numbers. */
@@ -28,7 +28,9 @@ export function FileView({ path, content }: { path: string; content: string }) {
     count: lines.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 30,
+    overscan: OVERSCAN,
+    // Render scrolled-in rows in React's normal update instead of a synchronous flush per scroll event.
+    useFlushSync: false,
   });
 
   if (lines.length === 0) {
