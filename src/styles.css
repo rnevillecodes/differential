@@ -1112,6 +1112,12 @@ button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+.terminal-tab-input {
+  margin: 2px 2px 2px 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
 .terminal-tab-status {
   color: var(--muted);
   font-size: 11px;

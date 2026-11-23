@@ -97,6 +97,7 @@ The terminal panel opens under the file pane with the terminal button at the rig
 
 - **+** opens another terminal; tabs switch between them, and × or a middle-click closes one, ending its shell and anything running in it. Closing the last terminal hides the panel.
 - Hiding the panel leaves its shells running. Exiting a shell (for example with `exit`) closes its tab, like the ×.
+- Double-click a terminal's tab (or press `F2` on it) to rename it. `Enter` saves, `Escape` cancels, and clearing the name restores the default "Terminal N".
 - Drag the panel's top edge to resize it. Whether it is shown and its height are remembered.
 - The maximize button in the panel's header makes the terminal fill the file pane's area; press it again to restore the panel's height. Combine it with `Ctrl+B` to give the terminal the whole window below the toolbar.
 - Copy and paste with `Ctrl+C` / `Ctrl+V` or the right-click menu. `Ctrl+C` copies only when text is selected; with no selection it goes to the shell as an interrupt.

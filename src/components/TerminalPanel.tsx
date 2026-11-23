@@ -1,6 +1,6 @@
 import "@xterm/xterm/css/xterm.css";
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { MIN_TERMINAL_HEIGHT, useApp, type TerminalTab } from "../store";
+import { MAX_TERMINAL_TITLE, MIN_TERMINAL_HEIGHT, useApp, type TerminalTab } from "../store";
 import { ChevronDownIcon, MaximizeIcon, PlusIcon, RestoreIcon } from "./icons";
 
 /** Space always left for the file pane above the terminal panel, in pixels. */
@@ -21,6 +21,7 @@ export function TerminalPanel() {
   const newTerminal = useApp((s) => s.newTerminal);
   const closeTerminal = useApp((s) => s.closeTerminal);
   const setActiveTerminal = useApp((s) => s.setActiveTerminal);
+  const renameTerminal = useApp((s) => s.renameTerminal);
   const setTerminalHeight = useApp((s) => s.setTerminalHeight);
   const maximized = useApp((s) => s.terminalMaximized);
   const toggleTerminalMaximized = useApp((s) => s.toggleTerminalMaximized);
@@ -113,6 +114,10 @@ export function TerminalPanel() {
               active={t.id === active}
               onSelect={() => setActiveTerminal(t.id)}
               onClose={() => closeTerminal(t.id)}
+              onRename={(title) => {
+                if (title !== null) renameTerminal(t.id, title);
+                if (active !== null) sessions.focus(active);
+              }}
             />
           ))}
         </div>
@@ -172,15 +177,19 @@ function TerminalTabButton({
   active,
   onSelect,
   onClose,
+  onRename,
 }: {
   tab: TerminalTab;
   active: boolean;
   onSelect: () => void;
   onClose: () => void;
+  /** Called when renaming ends: the new title, or null if it was cancelled. */
+  onRename: (title: string | null) => void;
 }) {
+  const [editing, setEditing] = useState(false);
   const label = statusLabel(tab);
-  const tooltip =
-    tab.status.kind === "failed" ? `${tab.title} — ${tab.status.message}` : `${tab.title} — ${tab.cwd}`;
+  const detail = tab.status.kind === "failed" ? tab.status.message : tab.cwd;
+  const tooltip = `${tab.title} — ${detail}\nDouble-click or F2 to rename`;
   return (
     <div
       className={`terminal-tab${active ? " active" : ""}${label ? ` ${label}` : ""}`}
@@ -192,10 +201,32 @@ function TerminalTabButton({
       }}
       onMouseDown={(e) => e.button === 1 && e.preventDefault()}
     >
-      <button type="button" role="tab" aria-selected={active} title={tooltip} onClick={onSelect}>
-        {tab.title}
-        {label && <span className="terminal-tab-status">({label})</span>}
-      </button>
+      {editing ? (
+        <TerminalTitleInput
+          title={tab.title}
+          onDone={(title) => {
+            setEditing(false);
+            onRename(title);
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={active}
+          title={tooltip}
+          onClick={onSelect}
+          onDoubleClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key !== "F2") return;
+            e.preventDefault();
+            setEditing(true);
+          }}
+        >
+          {tab.title}
+          {label && <span className="terminal-tab-status">({label})</span>}
+        </button>
+      )}
       <button
         type="button"
         className="editor-tab-close"
@@ -207,6 +238,45 @@ function TerminalTabButton({
         ×
       </button>
     </div>
+  );
+}
+
+/** Inline editor for a terminal tab's title: Enter or leaving it saves, Escape cancels. */
+function TerminalTitleInput({ title, onDone }: { title: string; onDone: (title: string | null) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  const finish = (value: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(value);
+  };
+
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  return (
+    <input
+      ref={ref}
+      className="terminal-tab-input"
+      aria-label="Terminal name"
+      defaultValue={title}
+      maxLength={MAX_TERMINAL_TITLE}
+      size={Math.max(8, title.length + 1)}
+      spellCheck={false}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          finish(e.currentTarget.value);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(null);
+        }
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+    />
   );
 }
 

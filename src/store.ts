@@ -64,6 +64,8 @@ export interface TerminalTab {
 /** Smallest terminal panel height, in pixels. */
 export const MIN_TERMINAL_HEIGHT = 120;
 export const DEFAULT_TERMINAL_HEIGHT = 260;
+/** Longest terminal tab title a rename keeps. */
+export const MAX_TERMINAL_TITLE = 60;
 
 /** Narrowest commit graph pane, in pixels. */
 export const MIN_GRAPH_WIDTH = 240;
@@ -195,6 +197,8 @@ export interface AppState {
   /** End a terminal's shell and remove its tab; closing the last one hides the panel. */
   closeTerminal(id: number): void;
   setActiveTerminal(id: number): void;
+  /** Label a terminal's tab; a blank title restores its default "Terminal N". */
+  renameTerminal(id: number, title: string): void;
   setTerminalHeight(height: number): void;
   /** Maximize the terminal panel over the file pane, or restore it to its height. */
   toggleTerminalMaximized(): void;
@@ -840,6 +844,14 @@ export function createAppStore(
 
       setActiveTerminal(id) {
         if (get().terminals.some((t) => t.id === id)) set({ activeTerminal: id });
+      },
+
+      renameTerminal(id, title) {
+        const { terminals } = get();
+        const tab = terminals.find((t) => t.id === id);
+        if (!tab) return;
+        const next = title.trim().slice(0, MAX_TERMINAL_TITLE) || `Terminal ${id}`;
+        if (next !== tab.title) set({ terminals: terminals.map((t) => (t.id === id ? { ...t, title: next } : t)) });
       },
 
       toggleTerminalMaximized() {

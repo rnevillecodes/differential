@@ -5,6 +5,7 @@ import {
   DEFAULT_GRAPH_WIDTH,
   DEFAULT_TERMINAL_HEIGHT,
   GRAPH_PAGE_SIZE,
+  MAX_TERMINAL_TITLE,
   MIN_GRAPH_WIDTH,
   MIN_TERMINAL_HEIGHT,
   type AppState,
@@ -572,6 +573,21 @@ describe("terminal panel state", () => {
 
     store.getState().newTerminal();
     expect(store.getState().terminals[0].title).toBe("Terminal 4");
+  });
+
+  it("renames terminals, trimming and capping the title; blank restores the default", async () => {
+    const { store } = setup();
+    await store.getState().openPath("C:/repo");
+    store.getState().newTerminal();
+    store.getState().newTerminal();
+    store.getState().renameTerminal(2, "  build  ");
+    expect(store.getState().terminals.map((t) => t.title)).toEqual(["Terminal 1", "build"]);
+    store.getState().renameTerminal(2, "x".repeat(MAX_TERMINAL_TITLE + 10));
+    expect(store.getState().terminals[1].title).toHaveLength(MAX_TERMINAL_TITLE);
+    store.getState().renameTerminal(2, " ");
+    expect(store.getState().terminals[1].title).toBe("Terminal 2");
+    store.getState().renameTerminal(99, "nope");
+    expect(store.getState().terminals.map((t) => t.title)).toEqual(["Terminal 1", "Terminal 2"]);
   });
 
   it("tracks session status from the session events; a start failure keeps its tab", async () => {

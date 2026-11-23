@@ -164,6 +164,38 @@ describe("terminal panel", () => {
     expect(terminalTabs()).toHaveLength(1);
   });
 
+  it("renames a tab by double-click or F2; Escape cancels and a blank name restores the default", async () => {
+    const { store } = await renderApp();
+    await toggleKey();
+    const tab = () => within(terminalTabs()[0]).getByRole("tab");
+    const input = () => screen.getByRole("textbox", { name: "Terminal name" });
+
+    fireEvent.doubleClick(tab());
+    expect(input()).toHaveFocus();
+    expect(input()).toHaveValue("Terminal 1");
+    fireEvent.change(input(), { target: { value: "  dev server  " } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(tab()).toHaveTextContent("dev server");
+    expect(screen.getByRole("button", { name: "Close dev server" })).toBeInTheDocument();
+    expect(FakeTerminal.instances[0].focused).toBe(true);
+
+    fireEvent.keyDown(tab(), { key: "F2" });
+    fireEvent.change(input(), { target: { value: "ignored" } });
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(tab()).toHaveTextContent("dev server");
+
+    fireEvent.doubleClick(tab());
+    fireEvent.change(input(), { target: { value: "tests" } });
+    fireEvent.blur(input());
+    expect(tab()).toHaveTextContent("tests");
+
+    fireEvent.doubleClick(tab());
+    fireEvent.change(input(), { target: { value: "   " } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(tab()).toHaveTextContent("Terminal 1");
+    expect(store.getState().terminals[0].title).toBe("Terminal 1");
+  });
+
   it("offers copy and paste in the context menu", async () => {
     const { store } = await renderApp();
     await toggleKey();
