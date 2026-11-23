@@ -14,7 +14,8 @@ import { isToggleKey } from "./terminal/sessions";
  * Ctrl+B toggle sidebar, Ctrl+G toggle the commit graph pane,
  * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs,
  * Ctrl+` show/hide the terminal panel, Ctrl+F find in the active tab (seeded with a single-line selection),
- * F3 / Shift+F3 next/previous match while the find bar is open.
+ * F3 / Shift+F3 next/previous match while the find bar is open,
+ * Ctrl+= / Ctrl++ zoom in, Ctrl+- zoom out, Ctrl+0 reset zoom.
  *
  * While a terminal has focus every key belongs to its shell, except Ctrl+`.
  */
@@ -36,6 +37,10 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
     if (e.key === "Tab") s.cycleTab(e.shiftKey ? -1 : 1);
     else if (e.key === "PageDown" && !e.shiftKey) s.cycleTab(1);
     else if (e.key === "PageUp" && !e.shiftKey) s.cycleTab(-1);
+    // Zoom keys come shifted or not depending on the layout (e.g. + is Shift+= on US keyboards).
+    else if (e.key === "=" || e.key === "+") s.zoomIn();
+    else if (e.key === "-" || e.key === "_") s.zoomOut();
+    else if (e.key === "0" && !e.shiftKey) s.resetZoom();
     else if (e.shiftKey) return false;
     else {
       const key = e.key.toLowerCase();
