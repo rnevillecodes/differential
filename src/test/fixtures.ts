@@ -107,6 +107,7 @@ export function fakeApi(over: Partial<Api> = {}): Api {
       hasMore: false,
     })),
     pickFolder: vi.fn(async () => null),
+    setZoom: vi.fn(async () => {}),
     terminalSpawn: vi.fn(async () => 1),
     terminalWrite: vi.fn(async () => {}),
     terminalResize: vi.fn(async () => {}),

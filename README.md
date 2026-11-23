@@ -43,7 +43,7 @@ The window opens maximised.
 
 ### Switching repositories
 
-The toolbar shows the open repository's path. Click it (or press `Ctrl+O`) for a searchable list of recently opened repositories: type to filter, pick one to open it, or type a folder path and press `Enter` to open that. **Browse for a folder…** picks a folder with the system dialog, and the × on a row removes it from the list. The list is remembered across restarts.
+The toolbar shows the open repository's path. Click it (or press `Ctrl+O`) for a searchable list of recently opened repositories: type to filter, pick one to open it, or type a folder path and press `Enter` to open that. **Browse for a folder…** picks a folder with the system dialog, and the × on a row removes it from the list. The list is remembered across restarts. Next to the path, the checked-out branch is shown (or *detached HEAD*); it updates on open and on refresh (`Ctrl+R`), so press refresh after switching branches in a terminal.
 
 ### Comparing against a branch
 
@@ -65,6 +65,7 @@ Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and
 | ``Ctrl+` `` | Show / hide the terminal panel (works inside a terminal too) |
 | `Ctrl+G` | Show / hide the commit graph |
 | `Ctrl+F` | Find in the open file or diff |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Zoom the whole UI in / out / back to 100% (also the − 100% + control in the toolbar; remembered across restarts) |
 | `F3` / `Shift+F3` | Next / previous match while the find bar is open |
 
 While a terminal has keyboard focus, every other key goes to the shell; click outside the terminal to use the shortcuts above.

@@ -1,7 +1,7 @@
-import { useApp } from "../store";
+import { currentBranch, MAX_ZOOM, MIN_ZOOM, useApp } from "../store";
 import { BasePicker } from "./BasePicker";
 import { GraphToggle } from "./CommitGraph";
-import { MoonIcon, SidebarIcon, SunIcon, TerminalIcon } from "./icons";
+import { BranchIcon, MoonIcon, SidebarIcon, SunIcon, TerminalIcon } from "./icons";
 import { RepoPicker } from "./RepoPicker";
 
 export function Toolbar() {
@@ -30,7 +30,10 @@ export function Toolbar() {
       >
         <SidebarIcon width={16} height={16} />
       </button>
-      <RepoPicker />
+      <div className="repo-group">
+        <RepoPicker />
+        <BranchBadge />
+      </div>
 
       <BasePicker />
 
@@ -59,6 +62,7 @@ export function Toolbar() {
         <TerminalIcon width={16} height={16} />
       </button>
       <GraphToggle />
+      <ZoomControl />
       <button
         type="button"
         className="icon-button theme-toggle"
@@ -69,5 +73,66 @@ export function Toolbar() {
         {theme === "dark" ? <SunIcon width={16} height={16} /> : <MoonIcon width={16} height={16} />}
       </button>
     </header>
+  );
+}
+
+/** The checked-out branch, refreshed with the refs (on open and on refresh). */
+function BranchBadge() {
+  const repo = useApp((s) => s.repo);
+  const branch = useApp((s) => currentBranch(s.refs));
+  if (!repo || branch === null) return null;
+  const detached = branch === "";
+  return (
+    <span
+      className={`branch-badge${detached ? " detached" : ""}`}
+      role="status"
+      aria-label={detached ? "HEAD is detached" : `Current branch: ${branch}`}
+      title={detached ? "HEAD is detached (no branch checked out)" : `Current branch: ${branch}`}
+    >
+      <BranchIcon width={13} height={13} />
+      <span className="branch-name">{detached ? "detached HEAD" : branch}</span>
+    </span>
+  );
+}
+
+/** Zoom out / current level (click to reset) / zoom in. */
+function ZoomControl() {
+  const zoom = useApp((s) => s.zoom);
+  const zoomIn = useApp((s) => s.zoomIn);
+  const zoomOut = useApp((s) => s.zoomOut);
+  const resetZoom = useApp((s) => s.resetZoom);
+  const percent = `${Math.round(zoom * 100)}%`;
+  return (
+    <div className="zoom-control" role="group" aria-label="Zoom">
+      <button
+        type="button"
+        className="icon-button"
+        onClick={zoomOut}
+        disabled={zoom <= MIN_ZOOM}
+        aria-label="Zoom out"
+        title="Zoom out (Ctrl+-)"
+      >
+        −
+      </button>
+      <button
+        type="button"
+        className="zoom-level"
+        onClick={resetZoom}
+        aria-label={`Zoom ${percent}, reset to 100%`}
+        title="Reset zoom (Ctrl+0)"
+      >
+        {percent}
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        onClick={zoomIn}
+        disabled={zoom >= MAX_ZOOM}
+        aria-label="Zoom in"
+        title="Zoom in (Ctrl+=)"
+      >
+        +
+      </button>
+    </div>
   );
 }

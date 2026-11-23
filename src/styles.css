@@ -183,9 +183,66 @@ button:focus-visible {
 
 /* ---- repository picker ---- */
 
+.repo-group {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.branch-badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+.branch-badge svg {
+  flex: none;
+  color: var(--muted);
+}
+.branch-badge.detached {
+  color: var(--muted);
+  font-style: italic;
+}
+.branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.zoom-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+.zoom-control .icon-button {
+  font-size: 15px;
+  line-height: 1;
+}
+.zoom-control .zoom-level {
+  min-width: 46px;
+  padding: 2px 4px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.zoom-control .zoom-level:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
 .repo-picker {
   position: relative;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
 }

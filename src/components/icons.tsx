@@ -150,6 +150,18 @@ export function MoonIcon(props: IconProps) {
   );
 }
 
+/** A branch forking off a line: the current git branch. */
+export function BranchIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="4.5" cy="3.5" r="1.5" />
+      <circle cx="4.5" cy="12.5" r="1.5" />
+      <circle cx="11.5" cy="4.5" r="1.5" />
+      <path d="M4.5 5v6M11.5 6c0 3-7 2.5-7 5" />
+    </Icon>
+  );
+}
+
 /** A branch leaving a line of commits and merging back: the commit graph. */
 export function GraphIcon(props: IconProps) {
   return (

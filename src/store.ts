@@ -71,6 +71,17 @@ export const MAX_TERMINAL_TITLE = 60;
 /** Narrowest commit graph pane, in pixels. */
 export const MIN_GRAPH_WIDTH = 240;
 export const DEFAULT_GRAPH_WIDTH = 360;
+/** UI zoom levels the zoom in/out controls step through; 1 is 100%. */
+export const ZOOM_LEVELS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;
+export const MIN_ZOOM = ZOOM_LEVELS[0];
+export const MAX_ZOOM = ZOOM_LEVELS[ZOOM_LEVELS.length - 1];
+
+/** The checked-out branch's name, "" when HEAD is detached, or null while the refs are unknown. */
+export function currentBranch(refs: RefInfo[] | null): string | null {
+  if (!refs) return null;
+  return refs.find((r) => r.current)?.name ?? "";
+}
+
 /** Commits fetched per history page. */
 export const GRAPH_PAGE_SIZE = 500;
 
@@ -117,6 +128,8 @@ export interface AppState {
   sidebarOpen: boolean;
   /** Light or dark colour theme: the saved choice, else the OS preference. */
   theme: Theme;
+  /** UI zoom factor, 1 = 100% (persisted). */
+  zoom: number;
   /** Every project file, once the Files tab has been opened for this repo. */
   projectFiles: string[] | null;
   filesError: ErrorPayload | null;
@@ -185,6 +198,11 @@ export interface AppState {
   toggleSidebar(): void;
   /** Switch between light and dark, remembering the choice. */
   toggleTheme(): void;
+  /** Step to the next larger / smaller zoom level. */
+  zoomIn(): void;
+  zoomOut(): void;
+  /** Back to 100%. */
+  resetZoom(): void;
   toggleFolder(path: string): void;
   setFolderExpanded(path: string, open: boolean): void;
   /** Collapse every folder in the project tree. */
@@ -274,6 +292,7 @@ const GRAPH_OPEN_KEY = "differential.graphOpen";
 const GRAPH_WIDTH_KEY = "differential.graphWidth";
 /** Also read by the pre-paint script in index.html. */
 const THEME_KEY = "differential.theme";
+const ZOOM_KEY = "differential.zoom";
 const MAX_RECENT_REPOS = 20;
 
 function readRecent(storage: KeyValue): string[] {
@@ -325,6 +344,11 @@ function foldersOf(paths: Iterable<string>): Set<string> {
 function readHeight(storage: KeyValue): number {
   const h = Number(storage.get(TERMINAL_HEIGHT_KEY));
   return Number.isFinite(h) && h >= MIN_TERMINAL_HEIGHT ? Math.round(h) : DEFAULT_TERMINAL_HEIGHT;
+}
+
+function readZoom(storage: KeyValue): number {
+  const z = Number(storage.get(ZOOM_KEY));
+  return Number.isFinite(z) && z >= MIN_ZOOM && z <= MAX_ZOOM ? z : 1;
 }
 
 function readGraphWidth(storage: KeyValue): number {
@@ -661,6 +685,20 @@ export function createAppStore(
       });
     }
 
+    const applyZoom = (zoom: number) => {
+      api.setZoom(zoom).catch(() => {
+        // zoom unsupported by the webview: the UI just stays at its current size
+      });
+    };
+    const setZoom = (zoom: number) => {
+      if (zoom === get().zoom) return;
+      storage.set(ZOOM_KEY, String(zoom));
+      applyZoom(zoom);
+      set({ zoom });
+    };
+    const initialZoom = readZoom(storage);
+    if (initialZoom !== 1) applyZoom(initialZoom);
+
     return {
       repo: null,
       base: "HEAD",
@@ -674,6 +712,7 @@ export function createAppStore(
       sidebarTab: savedTab === "files" ? "files" : "changes",
       sidebarOpen: storage.get(SIDEBAR_OPEN_KEY) !== "false",
       theme: initialTheme,
+      zoom: initialZoom,
       projectFiles: null,
       filesError: null,
       refs: null,
@@ -812,6 +851,20 @@ export function createAppStore(
         storage.set(THEME_KEY, theme);
         applyTheme(theme);
         set({ theme });
+      },
+
+      zoomIn() {
+        const z = get().zoom;
+        setZoom(ZOOM_LEVELS.find((l) => l > z + 1e-6) ?? MAX_ZOOM);
+      },
+
+      zoomOut() {
+        const z = get().zoom;
+        setZoom([...ZOOM_LEVELS].reverse().find((l) => l < z - 1e-6) ?? MIN_ZOOM);
+      },
+
+      resetZoom() {
+        setZoom(1);
       },
 
       toggleFolder(path) {

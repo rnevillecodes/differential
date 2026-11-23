@@ -1,6 +1,7 @@
 // Typed wrappers around the backend's Tauri commands.
 
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ChangeSet } from "../model/ChangeSet";
 import type { CommitPage } from "../model/CommitPage";
@@ -34,6 +35,8 @@ export interface Api {
   /** One page of the commit history (all branches, remote branches, tags and HEAD), topological order. */
   listCommits(root: string, offset: number, limit: number): Promise<CommitPage>;
   pickFolder(): Promise<string | null>;
+  /** Scale the whole UI, like browser zoom; `1` is 100%. */
+  setZoom(scale: number): Promise<void>;
   /**
    * Start the user's shell in `cwd` in a `cols`×`rows` pseudo-terminal. `onData` receives raw
    * output in order; `onExit` is called once, after the last output. Resolves to the session id.
@@ -69,6 +72,7 @@ export const tauriApi: Api = {
   viewFile: (root, path, force) => invoke("view_file", { root, path, force }),
   listRefs: (root) => invoke("list_refs", { root }),
   listCommits: (root, offset, limit) => invoke("list_commits", { root, offset, limit }),
+  setZoom: (scale) => getCurrentWebview().setZoom(scale),
   pickFolder: async () => {
     const picked = await open({ directory: true, multiple: false, title: "Open repository" });
     return typeof picked === "string" ? picked : null;
