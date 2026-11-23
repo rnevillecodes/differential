@@ -141,6 +141,7 @@ The commit graph pane runs down the right edge of the window, beside the file pa
 | `npm run typecheck` | TypeScript type check |
 | `npm run build` | Production build of the frontend |
 | `npx tauri build` | Release build of the app |
+| `npm run publish-build [-- [--build] [--dest DIR]]` | Copy the release binary to `~/bin` (or `DIR`); `--build` runs `npx tauri build` first |
 | `npm run perf-repo [dir] [-- --files [N]]` | Generate a repository with a 50,000-line single-file diff and 1,000 changed files (default `./perf-repo`) for performance checks; `--files` adds N unchanged files in nested folders (default 50,000) for the project tree |
 
 ### Layout
