@@ -152,10 +152,10 @@ export function TerminalPanel() {
           onPointerDown={(e) => e.stopPropagation()}
         >
           <button type="button" role="menuitem" disabled={!menu.canCopy} onClick={() => runMenu("copy")}>
-            Copy <kbd>Ctrl+Shift+C</kbd>
+            Copy <kbd>Ctrl+C</kbd>
           </button>
           <button type="button" role="menuitem" onClick={() => runMenu("paste")}>
-            Paste <kbd>Ctrl+Shift+V</kbd>
+            Paste <kbd>Ctrl+V</kbd>
           </button>
         </div>
       )}

@@ -99,7 +99,7 @@ The terminal panel opens under the file pane with the terminal button at the rig
 - Hiding the panel leaves its shells running. Exiting a shell (for example with `exit`) closes its tab, like the ×.
 - Drag the panel's top edge to resize it. Whether it is shown and its height are remembered.
 - The maximize button in the panel's header makes the terminal fill the file pane's area; press it again to restore the panel's height. Combine it with `Ctrl+B` to give the terminal the whole window below the toolbar.
-- Copy and paste with `Ctrl+Shift+C` / `Ctrl+Shift+V` or the right-click menu; plain `Ctrl+C` goes to the shell.
+- Copy and paste with `Ctrl+C` / `Ctrl+V` or the right-click menu. `Ctrl+C` copies only when text is selected; with no selection it goes to the shell as an interrupt.
 - Opening another repository keeps existing terminals where they are; new terminals start in the new repository.
 - The diff is not refreshed when you run commands; press `Ctrl+R` (outside the terminal) to see what they changed.
 
