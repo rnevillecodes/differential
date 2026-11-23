@@ -17,6 +17,10 @@
   --add-bg: #e6ffec;
   --add-gutter: #ccffd8;
   --add-word: #abf2bc;
+  /* find matches: translucent so add/remove backgrounds still show */
+  --find-bg: #ffd33d80;
+  --find-current: #ff9a3dcc;
+  --find-outline: #bc4c00;
   --rem-bg: #ffebe9;
   --rem-gutter: #ffd7d5;
   --rem-word: #ff818266;
@@ -56,6 +60,9 @@
     --add-bg: #12261e;
     --add-gutter: #1a3a2a;
     --add-word: #2e6b3f;
+    --find-bg: #bb800980;
+    --find-current: #f0883ecc;
+    --find-outline: #ffa657;
     --rem-bg: #2a1517;
     --rem-gutter: #42201f;
     --rem-word: #8e2f2f;
@@ -969,6 +976,53 @@ button:focus-visible {
 
 .ix.added-word { background: var(--add-word); border-radius: 2px; }
 .ix.removed-word { background: var(--rem-word); border-radius: 2px; }
+.find-match { background: var(--find-bg); border-radius: 2px; }
+.find-current { background: var(--find-current); outline: 1px solid var(--find-outline); outline-offset: -1px; }
+
+.find-bar {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px #0000002e;
+  font-size: 12px;
+}
+.find-bar input {
+  width: 200px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.find-count {
+  min-width: 70px;
+  padding: 0 6px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.find-count.none { color: var(--danger); }
+.find-toggle {
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.find-toggle.on {
+  border-color: var(--accent);
+  color: var(--fg);
+  background: var(--selected);
+}
+.diff-scroll:focus { outline: none; }
 
 .tok { color: var(--l); }
 @media (prefers-color-scheme: dark) {

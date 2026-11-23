@@ -785,3 +785,47 @@ describe("commit graph state", () => {
     expect(store.getState().graphWidth).toBe(MIN_GRAPH_WIDTH);
   });
 });
+
+describe("find", () => {
+  it("opens with focus, keeps the query and match case, and closes", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    const s = () => store.getState();
+    s().openFind();
+    expect(s().findOpen).toBe(true);
+    expect(s().findFocusSeq).toBe(1);
+    s().setFindQuery("foo");
+    s().toggleFindMatchCase();
+    s().setFindStatus({ current: 1, total: 3 });
+    s().closeFind();
+    expect(s().findOpen).toBe(false);
+    expect(s().findStatus).toBeNull();
+
+    s().openFind();
+    expect(s().findQuery).toBe("foo");
+    expect(s().findMatchCase).toBe(true);
+    expect(s().findFocusSeq).toBe(2);
+    s().openFind("bar");
+    expect(s().findQuery).toBe("bar");
+  });
+
+  it("requests next and previous only while open", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    const s = () => store.getState();
+    s().findNext();
+    expect(s().findNav.seq).toBe(0);
+    s().openFind();
+    s().findNext();
+    expect(s().findNav).toEqual({ seq: 1, dir: 1 });
+    s().findPrev();
+    expect(s().findNav).toEqual({ seq: 2, dir: -1 });
+  });
+
+  it("ignores an unchanged status", () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    store.getState().setFindStatus({ current: 2, total: 5 });
+    const first = store.getState().findStatus;
+    store.getState().setFindStatus({ current: 2, total: 5 });
+    expect(store.getState().findStatus).toBe(first);
+  });
+});
+

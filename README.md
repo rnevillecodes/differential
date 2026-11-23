@@ -64,6 +64,8 @@ Any other revision works too: type it (for example `HEAD~3` or a commit SHA) and
 | `Ctrl+\` | Toggle unified / side-by-side view |
 | ``Ctrl+` `` | Show / hide the terminal panel (works inside a terminal too) |
 | `Ctrl+G` | Show / hide the commit graph |
+| `Ctrl+F` | Find in the open file or diff |
+| `F3` / `Shift+F3` | Next / previous match while the find bar is open |
 
 While a terminal has keyboard focus, every other key goes to the shell; click outside the terminal to use the shortcuts above.
 
@@ -74,6 +76,17 @@ The view mode is remembered across files and restarts. Shift+mouse wheel scrolls
 Files open in tabs above the diff, so several can be open at once. A single click in the sidebar opens a file in the *preview* tab (shown in italics), which the next single click replaces; double-click a file (or press `Enter` in the Files tree) to open it in a tab that stays. Double-clicking the preview tab keeps it too.
 
 Close a tab with its ×, a middle-click, or `Ctrl+W`. With a tab focused, `←` / `→` and `Home` / `End` move between tabs and `Delete` closes one. Tabs for files that no longer exist are closed on refresh.
+
+### Find
+
+Press `Ctrl+F` to find text in the file or diff open in the current tab. If you have selected text on one line, it becomes the search. Otherwise the last search is kept.
+
+- The bar shows which match is current and how many there are ("3 of 17"), or "No results". Every match on screen is highlighted, and the current one stands out.
+- `Enter` / `Shift+Enter` in the field, the arrow buttons, or `F3` / `Shift+F3` move to the next / previous match, wrapping around. The view scrolls, sideways too, to show it; in side-by-side view only the side holding the match scrolls.
+- Search is plain text and ignores case unless you turn on **Aa** (match case).
+- In a diff, both removed and added lines are searched, and so are unchanged lines hidden in collapsed regions. Moving to a hidden match expands its region. Line numbers are not searched.
+- The search stays as you switch tabs and applies to whichever tab is active. `Escape` or the × closes the bar.
+- Inside a terminal, `Ctrl+F` goes to the shell.
 
 ### Sidebar
 

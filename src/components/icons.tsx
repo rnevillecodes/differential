@@ -160,3 +160,19 @@ export function RestoreIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <Icon width={12} height={12} {...props}>
+      <path d="M4 10l4-4 4 4" />
+    </Icon>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <Icon width={12} height={12} {...props}>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </Icon>
+  );
+}

@@ -13,7 +13,8 @@ import { isToggleKey } from "./terminal/sessions";
  * Global shortcuts: ] / [ next/previous file, Ctrl+R refresh, Ctrl+O repository picker, Ctrl+\ toggle view,
  * Ctrl+B toggle sidebar, Ctrl+G toggle the commit graph pane,
  * Ctrl+W close tab, Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / Ctrl+PageUp) switch tabs,
- * Ctrl+` show/hide the terminal panel.
+ * Ctrl+` show/hide the terminal panel, Ctrl+F find in the active tab (seeded with a single-line selection),
+ * F3 / Shift+F3 next/previous match while the find bar is open.
  *
  * While a terminal has focus every key belongs to its shell, except Ctrl+`.
  */
@@ -25,6 +26,12 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
   const target = e.target as HTMLElement | null;
   if (target?.closest?.("[data-terminal]")) return false;
   const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+  if (e.key === "F3" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (!s.findOpen) return false;
+    if (e.shiftKey) s.findPrev();
+    else s.findNext();
+    return true;
+  }
   if (e.ctrlKey && !e.altKey) {
     if (e.key === "Tab") s.cycleTab(e.shiftKey ? -1 : 1);
     else if (e.key === "PageDown" && !e.shiftKey) s.cycleTab(1);
@@ -37,6 +44,10 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
       else if (key === "\\") s.toggleViewMode();
       else if (key === "b") s.toggleSidebar();
       else if (key === "g") s.toggleGraph();
+      else if (key === "f") {
+        // Handled (default prevented) even without a tab, so the webview's own find never opens.
+        if (s.activePath !== null) s.openFind(selectionQuery());
+      }
       else if (key === "w") {
         if (s.activePath !== null) s.closeTab(s.activePath);
       } else return false;
@@ -48,6 +59,17 @@ export function handleShortcut(e: KeyboardEvent, s: AppState): boolean {
   else if (e.key === "[") s.selectPrev();
   else return false;
   return true;
+}
+
+/** The selected text, if it lies within one line of the open tab's view; otherwise undefined. */
+function selectionQuery(): string | undefined {
+  const sel = window.getSelection?.();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return undefined;
+  const text = sel.toString();
+  if (text === "" || /[\r\n]/.test(text)) return undefined;
+  const node = sel.getRangeAt(0).commonAncestorContainer;
+  const el = node instanceof Element ? node : node.parentElement;
+  return el?.closest(".tab-panels") ? text : undefined;
 }
 
 export default function App({ store: injected }: { store?: StoreApi<AppState> }) {

@@ -153,6 +153,18 @@ export interface AppState {
   graphWidth: number;
   graph: GraphData;
 
+  /** Whether the find bar is shown over the active tab. */
+  findOpen: boolean;
+  findQuery: string;
+  /** Match letter case exactly (this session only). */
+  findMatchCase: boolean;
+  /** Request for the active view to move to the next (1) or previous (-1) match; `seq` changes per request. */
+  findNav: { seq: number; dir: 1 | -1 };
+  /** Changes whenever the find field should take focus and select its text. */
+  findFocusSeq: number;
+  /** The active view's current match (1-based) and total, or null while it has not reported. */
+  findStatus: FindStatus | null;
+
   init(): Promise<void>;
   openPath(path: string, base?: string): Promise<void>;
   pickAndOpen(): Promise<void>;
@@ -208,6 +220,20 @@ export interface AppState {
   setGraphWidth(width: number): void;
   /** Load the next page of history, unless one is loading or none remain. */
   loadMoreCommits(): void;
+
+  /** Show the find bar and focus its field; `initialQuery` (e.g. the selection) replaces the query. */
+  openFind(initialQuery?: string): void;
+  closeFind(): void;
+  setFindQuery(query: string): void;
+  toggleFindMatchCase(): void;
+  findNext(): void;
+  findPrev(): void;
+  setFindStatus(status: FindStatus | null): void;
+}
+
+export interface FindStatus {
+  current: number;
+  total: number;
 }
 
 /** Minimal key-value storage (localStorage in the app). */
@@ -646,6 +672,12 @@ export function createAppStore(
       graphOpen: storage.get(GRAPH_OPEN_KEY) === "true",
       graphWidth: readGraphWidth(storage),
       graph: emptyGraph(),
+      findOpen: false,
+      findQuery: "",
+      findMatchCase: false,
+      findNav: { seq: 0, dir: 1 },
+      findFocusSeq: 0,
+      findStatus: null,
 
       async init() {
         // Run once per store: React StrictMode mounts effects twice in development.
@@ -852,6 +884,40 @@ export function createAppStore(
         if (!tab) return;
         const next = title.trim().slice(0, MAX_TERMINAL_TITLE) || `Terminal ${id}`;
         if (next !== tab.title) set({ terminals: terminals.map((t) => (t.id === id ? { ...t, title: next } : t)) });
+      },
+
+      openFind(initialQuery) {
+        set({
+          findOpen: true,
+          findQuery: initialQuery ?? get().findQuery,
+          findFocusSeq: get().findFocusSeq + 1,
+        });
+      },
+
+      closeFind() {
+        set({ findOpen: false, findStatus: null });
+      },
+
+      setFindQuery(query) {
+        set({ findQuery: query });
+      },
+
+      toggleFindMatchCase() {
+        set({ findMatchCase: !get().findMatchCase });
+      },
+
+      findNext() {
+        if (get().findOpen) set({ findNav: { seq: get().findNav.seq + 1, dir: 1 } });
+      },
+
+      findPrev() {
+        if (get().findOpen) set({ findNav: { seq: get().findNav.seq + 1, dir: -1 } });
+      },
+
+      setFindStatus(status) {
+        const cur = get().findStatus;
+        if (cur === status || (cur && status && cur.current === status.current && cur.total === status.total)) return;
+        set({ findStatus: status });
       },
 
       toggleTerminalMaximized() {

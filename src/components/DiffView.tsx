@@ -1,6 +1,9 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import { highlighter } from "../highlight/client";
+import { diffUnits, gapContaining, lineKey, lineKeyIndex, type FindMatch, type SearchUnit } from "../find/match";
+import { charWidth, gutterWidth, revealColumns, revealRow } from "../find/reveal";
+import { lineFind, useFind, useSearching, type FindHighlights } from "../find/useFind";
 import { segments, type LineTokens } from "../highlight/tokens";
 import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
@@ -20,6 +23,9 @@ import { TokenSpans } from "./TokenSpans";
 export const ROW_HEIGHT = 20;
 /** Rows rendered beyond each edge of the viewport. */
 export const OVERSCAN = 10;
+/** Unified gutter (two line-number columns and the marker) and a split cell's line-number width, without layout. */
+const UNIFIED_GUTTER = 122;
+const SPLIT_LN = 52;
 
 interface Props {
   file: FileSummary;
@@ -28,6 +34,8 @@ interface Props {
   oldContent: string | null;
   newContent: string | null;
   mode: ViewMode;
+  /** Whether this view's tab is the active one (find runs only there). */
+  active?: boolean;
 }
 
 /** Tokens for both sides, filled in asynchronously by the highlight worker. */
@@ -49,7 +57,7 @@ function useTokens(file: FileSummary, baseSha: string, oldContent: string | null
   return tokens;
 }
 
-export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: Props) {
+export function DiffView({ file, baseSha, diff, oldContent, newContent, mode, active = true }: Props) {
   const [expansion, setExpansion] = useState<ExpansionState>({});
   const tokens = useTokens(file, baseSha, oldContent, newContent);
   const { rows, gaps, maxColumns } = useMemo(
@@ -72,6 +80,68 @@ export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: 
     (gap: Gap, how: "all" | "up" | "down") => setExpansion((s) => expandGap(s, gap, how)),
     [],
   );
+  // ---- find: search every line (including collapsed ones), reveal the current match
+  const searching = useSearching(active);
+  const units = useMemo(
+    () => (searching ? diffUnits({ diff, oldContent, newContent, mode }) : null),
+    [searching, diff, oldContent, newContent, mode],
+  );
+  const unitIndex = useMemo(() => (units ? new Map(units.map((u, i) => [u.key, i])) : null), [units]);
+  const keyIndex = useMemo(() => (searching ? lineKeyIndex(rows) : null), [searching, rows]);
+  const latest = useRef({ keyIndex, gaps });
+  latest.current = { keyIndex, gaps };
+  const pendingReveal = useRef<{ unit: SearchUnit; match: FindMatch } | null>(null);
+
+  const revealMatch = (unit: SearchUnit, match: FindMatch) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const index = latest.current.keyIndex?.get(unit.key);
+    if (index === undefined) {
+      // Hidden in a collapsed region: expand it, then reveal once the rows are rebuilt.
+      const gap = gapContaining(latest.current.gaps, unit);
+      if (gap) {
+        pendingReveal.current = { unit, match };
+        setExpansion((s) => expandGap(s, gap, "all"));
+      }
+      return;
+    }
+    revealRow(el, index, ROW_HEIGHT);
+    const cw = charWidth(el);
+    if (mode === "unified") {
+      const visible = el.clientWidth - gutterWidth(el, ".row .gutter", UNIFIED_GUTTER);
+      revealColumns(el, cw, unit.text, match.start, match.end, visible);
+      return;
+    }
+    // Split: scroll only the side(s) showing the line, through that side's scrollbar.
+    const sides = unit.kind === "removed" ? ["left"] : unit.kind === "added" ? ["right"] : ["left", "right"];
+    for (const side of sides) {
+      const bar = el.parentElement?.querySelector<HTMLElement>(`.hscroll [data-pane="${side}"]`);
+      if (bar) revealColumns(bar, cw, unit.text, match.start, match.end, bar.clientWidth - SPLIT_LN);
+    }
+  };
+
+  useEffect(() => {
+    const p = pendingReveal.current;
+    if (p && keyIndex?.has(p.unit.key)) {
+      pendingReveal.current = null;
+      revealMatch(p.unit, p.match);
+    }
+  });
+
+  const find = useFind(active, units, {
+    topUnit: () => {
+      const first = Math.floor((scrollRef.current?.scrollTop ?? 0) / ROW_HEIGHT);
+      for (let i = first; i < rows.length; i++) {
+        const r = rows[i];
+        const line = r.type === "line" ? r.line : r.type === "pair" ? (r.left ?? r.right) : null;
+        const u = line ? unitIndex?.get(lineKey(line)) : undefined;
+        if (u !== undefined) return u;
+      }
+      return 0;
+    },
+    reveal: revealMatch,
+  });
+
   const contentWidth = `calc(${maxColumns}ch + 24px)`;
 
   return (
@@ -80,6 +150,7 @@ export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: 
         className="diff-scroll"
         ref={scrollRef}
         data-testid="diff-scroll"
+        tabIndex={-1}
         onWheel={mode === "split" ? (e) => splitWheel(e, scrollRef.current) : undefined}
       >
         <div
@@ -99,6 +170,7 @@ export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: 
                 tokens={tokens}
                 gap={row.type === "gap" ? gaps[row.gapIndex] : undefined}
                 onExpand={onExpand}
+                find={find}
               />
             );
           })}
@@ -111,19 +183,34 @@ export function DiffView({ file, baseSha, diff, oldContent, newContent, mode }: 
 
 type Tokens = { old: LineTokens[] | null; new: LineTokens[] | null };
 
-const RowView = memo(function RowView({
-  row,
-  top,
-  tokens,
-  gap,
-  onExpand,
-}: {
+interface RowProps {
   row: Row;
   top: number;
   tokens: Tokens;
   gap?: Gap;
   onExpand: (gap: Gap, how: "all" | "up" | "down") => void;
-}) {
+  find: FindHighlights;
+}
+
+/** Line keys shown in a row. */
+function rowKeys(row: Row): string[] {
+  if (row.type === "line") return [lineKey(row.line)];
+  if (row.type === "pair") return [row.left, row.right].filter((l): l is DisplayLine => l !== null).map(lineKey);
+  return [];
+}
+
+/** Rows re-render on a find change only when their own lines' matches or current match change. */
+function sameRow(a: RowProps, b: RowProps): boolean {
+  if (a.row !== b.row || a.top !== b.top || a.tokens !== b.tokens || a.gap !== b.gap || a.onExpand !== b.onExpand) return false;
+  if (a.find === b.find) return true;
+  return rowKeys(a.row).every((k) => {
+    const curA = a.find.current?.key === k ? a.find.current.range : null;
+    const curB = b.find.current?.key === k ? b.find.current.range : null;
+    return a.find.ranges.get(k) === b.find.ranges.get(k) && curA === curB;
+  });
+}
+
+const RowView = memo(function RowView({ row, top, tokens, gap, onExpand, find }: RowProps) {
   const style = { transform: `translateY(${top}px)` };
   if (row.type === "gap") return <GapView row={row} gap={gap!} style={style} onExpand={onExpand} />;
 
@@ -136,20 +223,30 @@ const RowView = memo(function RowView({
           <span className="ln">{l.newNo ?? ""}</span>
           <span className="marker">{l.kind === "added" ? "+" : l.kind === "removed" ? "-" : " "}</span>
         </span>
-        <Code line={l} tokens={tokens} />
+        <Code line={l} tokens={tokens} find={find} />
       </div>
     );
   }
 
   return (
     <div className="row" style={style} data-testid="diff-row">
-      <Cell side="left" line={row.left} tokens={tokens} />
-      <Cell side="right" line={row.right} tokens={tokens} />
+      <Cell side="left" line={row.left} tokens={tokens} find={find} />
+      <Cell side="right" line={row.right} tokens={tokens} find={find} />
     </div>
   );
-});
+}, sameRow);
 
-function Cell({ side, line, tokens }: { side: "left" | "right"; line: DisplayLine | null; tokens: Tokens }) {
+function Cell({
+  side,
+  line,
+  tokens,
+  find,
+}: {
+  side: "left" | "right";
+  line: DisplayLine | null;
+  tokens: Tokens;
+  find: FindHighlights;
+}) {
   if (!line) return <span className={`cell ${side} filler`} />;
   const no = side === "left" ? line.oldNo : line.newNo;
   return (
@@ -157,22 +254,22 @@ function Cell({ side, line, tokens }: { side: "left" | "right"; line: DisplayLin
       <span className="ln">{no ?? ""}</span>
       <span className="code">
         <span className="shift">
-          <CodeSegments line={line} tokens={tokens} />
+          <CodeSegments line={line} tokens={tokens} find={find} />
         </span>
       </span>
     </span>
   );
 }
 
-function Code({ line, tokens }: { line: DisplayLine; tokens: Tokens }) {
+function Code({ line, tokens, find }: { line: DisplayLine; tokens: Tokens; find: FindHighlights }) {
   return (
     <span className="code">
-      <CodeSegments line={line} tokens={tokens} />
+      <CodeSegments line={line} tokens={tokens} find={find} />
     </span>
   );
 }
 
-function CodeSegments({ line, tokens }: { line: DisplayLine; tokens: Tokens }) {
+function CodeSegments({ line, tokens, find }: { line: DisplayLine; tokens: Tokens; find: FindHighlights }) {
   // Removed lines are highlighted from the base; everything else from the worktree
   // (falling back to the base for files whose worktree side is missing).
   const lineTokens =
@@ -186,7 +283,12 @@ function CodeSegments({ line, tokens }: { line: DisplayLine; tokens: Tokens }) {
           ? tokens.old?.[line.oldNo - 1]
           : undefined;
   const wordClass = line.kind === "added" ? "ix added-word" : "ix removed-word";
-  return <TokenSpans segments={segments(line.text, lineTokens, line.intraline)} changedClass={wordClass} />;
+  return (
+    <TokenSpans
+      segments={segments(line.text, lineTokens, line.intraline, lineFind(find, lineKey(line)))}
+      changedClass={wordClass}
+    />
+  );
 }
 
 function GapView({
