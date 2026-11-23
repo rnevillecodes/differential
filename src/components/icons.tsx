@@ -131,6 +131,25 @@ export function TerminalIcon(props: IconProps) {
   );
 }
 
+/** A sun: switch to the light theme. */
+export function SunIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="8" cy="8" r="2.75" />
+      <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06" />
+    </Icon>
+  );
+}
+
+/** A crescent moon: switch to the dark theme. */
+export function MoonIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M13.5 9.5A5.75 5.75 0 0 1 6.5 2.5a5.75 5.75 0 1 0 7 7z" />
+    </Icon>
+  );
+}
+
 /** A branch leaving a line of commits and merging back: the commit graph. */
 export function GraphIcon(props: IconProps) {
   return (

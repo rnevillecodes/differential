@@ -1,4 +1,4 @@
-// xterm colours derived from the app's CSS custom properties, so terminals follow light/dark mode.
+// xterm colours derived from the app's CSS custom properties, so terminals follow the app's light/dark theme.
 
 import type { ITheme } from "@xterm/xterm";
 
@@ -41,14 +41,29 @@ const DARK_ANSI: ITheme = {
   brightWhite: "#f0f6fc",
 };
 
+export type Theme = "light" | "dark";
+
 export const DARK_QUERY = "(prefers-color-scheme: dark)";
 
 export function prefersDark(): boolean {
   return typeof window.matchMedia === "function" && window.matchMedia(DARK_QUERY).matches;
 }
 
+/** Apply the app theme: the stylesheet keys its colours off `data-theme` on <html>. */
+export function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
+}
+
+/** Whether the document is currently in dark mode (the OS preference until a theme is applied). */
+export function isDark(): boolean {
+  const theme = document.documentElement.dataset.theme;
+  return theme ? theme === "dark" : prefersDark();
+}
+
 /** The current terminal theme, read from the document's CSS variables. */
-export function terminalTheme(dark = prefersDark()): ITheme {
+export function terminalTheme(dark = isDark()): ITheme {
   const css = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
   const bg = v("--bg", dark ? "#0d1117" : "#ffffff");
