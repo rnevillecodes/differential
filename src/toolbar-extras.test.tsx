@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App, { handleShortcut } from "./App";
 import { createAppStore, currentBranch, MAX_ZOOM, MIN_ZOOM } from "./store";
-import { fakeApi, memoryStorage } from "./test/fixtures";
+import { fakeApi, fakeWatcher, flush, memoryStorage } from "./test/fixtures";
 
 const key = (k: string, mods: Partial<KeyboardEventInit> = {}) =>
   new KeyboardEvent("keydown", { key: k, ctrlKey: true, ...mods });
@@ -97,5 +97,54 @@ describe("current branch", () => {
     api.listRefs = async () => [{ name: "main", rev: "main", kind: "local", current: true }];
     await act(() => store.getState().refresh());
     expect(screen.getByRole("status", { name: "Current branch: main" })).toBeInTheDocument();
+  });
+});
+
+describe("automatic updates notice", () => {
+  async function renderWith(api = fakeApi()) {
+    const store = createAppStore(api, memoryStorage());
+    await act(async () => {
+      await store.getState().openPath("C:/repo");
+      await flush();
+    });
+    render(<App store={store} />);
+    return store;
+  }
+
+  it("is not shown while the repository is watched", async () => {
+    await renderWith();
+    expect(screen.queryByText("Automatic updates unavailable")).toBeNull();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+  });
+
+  it("shows the reason when watching is unavailable, and Refresh still works", async () => {
+    const watcher = fakeWatcher();
+    const api = fakeApi({ ...watcher.api });
+    await renderWith(api);
+    act(() => watcher.emit({ kind: "unavailable", message: "The repository folder no longer exists." }));
+    const notice = screen.getByText("Automatic updates unavailable");
+    expect(notice).toHaveAttribute("title", expect.stringContaining("The repository folder no longer exists."));
+    const refresh = screen.getByRole("button", { name: "Refresh" });
+    expect(refresh).toBeEnabled();
+    vi.mocked(api.listChanges).mockClear();
+    await act(async () => {
+      fireEvent.click(refresh);
+      await flush();
+    });
+    expect(api.listChanges).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows when watching could not start", async () => {
+    await renderWith(
+      fakeApi({
+        watchRepo: vi.fn(async () => {
+          throw { kind: "io", message: "File changes on this drive can't be watched." };
+        }),
+      }),
+    );
+    expect(screen.getByText("Automatic updates unavailable")).toHaveAttribute(
+      "title",
+      expect.stringContaining("File changes on this drive can't be watched."),
+    );
   });
 });

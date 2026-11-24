@@ -7,6 +7,7 @@ import type { CommitInfo } from "../model/CommitInfo";
 import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
 import type { Hunk } from "../model/Hunk";
+import type { RepoEvent } from "../model/RepoEvent";
 import type { Line } from "../model/Line";
 import type { KeyValue } from "../store";
 
@@ -112,7 +113,38 @@ export function fakeApi(over: Partial<Api> = {}): Api {
     terminalWrite: vi.fn(async () => {}),
     terminalResize: vi.fn(async () => {}),
     terminalClose: vi.fn(async () => {}),
+    watchRepo: vi.fn(async () => 1),
+    unwatchRepo: vi.fn(async () => {}),
     ...over,
+  };
+}
+
+/**
+ * A controllable repository watcher for `fakeApi`: spread `api` into the overrides, then call
+ * `emit` to deliver an event to the most recent watch (or to a given earlier one by index).
+ */
+export function fakeWatcher() {
+  const listeners: ((e: RepoEvent) => void)[] = [];
+  let nextId = 0;
+  const api = {
+    watchRepo: vi.fn(async (_root: string, onEvent: (e: RepoEvent) => void) => {
+      listeners.push(onEvent);
+      return ++nextId;
+    }),
+    unwatchRepo: vi.fn(async () => {}),
+  };
+  return {
+    api,
+    /** Number of watches started so far. */
+    get count() {
+      return listeners.length;
+    },
+    emit(event: RepoEvent, watch = listeners.length - 1) {
+      listeners[watch]?.(event);
+    },
+    changed(worktree = true, git = false, watch?: number) {
+      this.emit({ kind: "changed", worktree, git }, watch);
+    },
   };
 }
 

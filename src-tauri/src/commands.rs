@@ -15,6 +15,7 @@ use crate::error::{AppError, Result};
 use crate::files::{self, FileView};
 use crate::git::{self, CommitPage, Git, RefInfo, RepoInfo};
 use crate::terminal::{TerminalExit, TerminalManager};
+use crate::watch::{RepoEvent, WatchersState};
 
 /// Arguments given on the command line: `differential [path] [--base <rev>] [--wait]`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, TS)]
@@ -173,6 +174,38 @@ pub async fn terminal_close(terminals: tauri::State<'_, Terminals>, id: u32) -> 
     let terminals = terminals.inner().clone();
     blocking(move || {
         terminals.close(id);
+        Ok(())
+    })
+    .await
+}
+
+/// Watch the repository at `root` for changes, replacing any current watch. Events arrive on
+/// `on_event`. Returns the watch id for [`unwatch_repo`].
+#[tauri::command]
+pub async fn watch_repo(
+    watchers: tauri::State<'_, WatchersState>,
+    root: String,
+    on_event: Channel<RepoEvent>,
+) -> Result<u32> {
+    let watchers = watchers.inner().clone();
+    blocking(move || {
+        watchers.watch(
+            Git::default(),
+            Path::new(&root),
+            Box::new(move |event| {
+                let _ = on_event.send(event);
+            }),
+        )
+    })
+    .await
+}
+
+/// Stop watch `id` if it is still the current one; stale ids are ignored.
+#[tauri::command]
+pub async fn unwatch_repo(watchers: tauri::State<'_, WatchersState>, id: u32) -> Result<()> {
+    let watchers = watchers.inner().clone();
+    blocking(move || {
+        watchers.unwatch(id);
         Ok(())
     })
     .await

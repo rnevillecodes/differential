@@ -94,3 +94,21 @@ fn unresolvable_revision_is_bad_revision() {
         assert!(matches!(err, AppError::BadRevision(_)), "{bad}: {err:?}");
     }
 }
+
+#[test]
+fn resolves_git_dirs_for_main_and_linked_worktrees() {
+    use differential_lib::git::{canonical, git_dirs};
+    let repo = TestRepo::with_files(&[("a.txt", "a\n")]);
+    let dirs = git_dirs(&Git::default(), repo.path()).unwrap();
+    let dot_git = canonical(&repo.path().join(".git"));
+    assert_eq!(dirs.git_dir, dot_git);
+    assert_eq!(dirs.common_dir, dot_git);
+
+    let other = tempfile::tempdir().unwrap();
+    let wt = other.path().join("wt");
+    repo.git(&["worktree", "add", "-q", wt.to_str().unwrap()]);
+    let dirs = git_dirs(&Git::default(), &wt).unwrap();
+    assert_eq!(dirs.common_dir, dot_git);
+    assert!(dirs.git_dir.starts_with(dot_git.join("worktrees")), "{:?}", dirs.git_dir);
+    assert!(dirs.git_dir.join("HEAD").is_file());
+}

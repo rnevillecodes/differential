@@ -75,6 +75,21 @@ impl Git {
         args: &[S],
         input: &[u8],
     ) -> Result<Vec<u8>> {
+        let out = self.run_raw_with_stdin(cwd, args, input)?;
+        if out.success {
+            Ok(out.stdout)
+        } else {
+            Err(classify_failure(cwd, &out.stderr))
+        }
+    }
+
+    /// Run git feeding `input` on stdin and return its output regardless of exit status.
+    pub fn run_raw_with_stdin<S: AsRef<OsStr>>(
+        &self,
+        cwd: &Path,
+        args: &[S],
+        input: &[u8],
+    ) -> Result<GitOutput> {
         use std::io::Write;
         use std::process::Stdio;
         let mut child = self
@@ -99,14 +114,11 @@ impl Git {
         writer
             .join()
             .map_err(|_| AppError::Io("stdin writer panicked".into()))??;
-        if out.status.success() {
-            Ok(out.stdout)
-        } else {
-            Err(classify_failure(
-                cwd,
-                String::from_utf8_lossy(&out.stderr).trim(),
-            ))
-        }
+        Ok(GitOutput {
+            success: out.status.success(),
+            stdout: out.stdout,
+            stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        })
     }
 
     /// Run git, mapping a non-zero exit to an error.

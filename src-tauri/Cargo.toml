@@ -26,6 +26,7 @@ thiserror = "2.0.21"
 similar = "3.2.1"
 ts-rs = "12.0.1"
 portable-pty = "0.9.0"
+notify = "9.0.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

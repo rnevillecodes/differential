@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import App from "../App";
 import type { Api } from "../api";
 import { createAppStore } from "../store";
-import { changeSet, fakeApi, flush, memoryStorage, summary } from "../test/fixtures";
+import { changeSet, fakeApi, fakeWatcher, flush, memoryStorage, summary } from "../test/fixtures";
 
 const PROJECT = ["README.md", "src/a.ts", "src/ui/b.tsx", "src/ui/c.tsx", "assets/logo.png", "big.log"];
 
@@ -394,5 +394,39 @@ describe("unchanged file view", () => {
       await flush();
     });
     expect(screen.getByTestId("missing-placeholder")).toHaveTextContent("Refresh");
+  });
+});
+
+describe("automatic updates in the tree", () => {
+  it("shows a new file without the user acting, keeping open folders and scroll", async () => {
+    const watcher = fakeWatcher();
+    const api = explorerApi(watcher.api);
+    const { store } = await renderApp(api);
+    act(() => {
+      store.getState().setFolderExpanded("src", true);
+      store.getState().setFolderExpanded("src/ui", true);
+    });
+    const tree = screen.getByRole("tree");
+    tree.scrollTop = 24;
+    const expandedBefore = store.getState().expanded;
+
+    vi.mocked(api.listFiles).mockResolvedValue([...PROJECT, "src/ui/d.tsx"]);
+    vi.mocked(api.listChanges).mockResolvedValue(
+      changeSet([
+        summary(0, "src/a.ts"),
+        summary(1, "src/ui/b.tsx", { status: "untracked", oldPath: null }),
+        summary(2, "src/ui/d.tsx", { status: "untracked", oldPath: null }),
+      ]),
+    );
+    await act(async () => {
+      watcher.changed();
+      await flush();
+      await flush();
+    });
+
+    expect(within(row("d.tsx")).getByLabelText("untracked")).toBeInTheDocument();
+    expect([...store.getState().expanded].sort()).toEqual([...expandedBefore].sort());
+    expect(screen.getByRole("tree")).toBe(tree);
+    expect(tree.scrollTop).toBe(24);
   });
 });

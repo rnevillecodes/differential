@@ -7,6 +7,7 @@ pub mod files;
 pub mod git;
 pub mod launch;
 pub mod terminal;
+pub mod watch;
 
 use commands::InitialArgs;
 
@@ -19,6 +20,7 @@ pub fn configure<R: tauri::Runtime>(
         .plugin(tauri_plugin_dialog::init())
         .manage(args)
         .manage(commands::Terminals::default())
+        .manage(watch::WatchersState::default())
         .invoke_handler(tauri::generate_handler![
             commands::initial_args,
             commands::open_repo,
@@ -33,6 +35,8 @@ pub fn configure<R: tauri::Runtime>(
             commands::terminal_write,
             commands::terminal_resize,
             commands::terminal_close,
+            commands::watch_repo,
+            commands::unwatch_repo,
         ])
 }
 
@@ -56,10 +60,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // End every terminal shell (and its programs) when the app quits.
+            // End every terminal shell (and its programs) and stop watching when the app quits.
             if let tauri::RunEvent::Exit = event {
                 use tauri::Manager;
                 app.state::<commands::Terminals>().close_all();
+                app.state::<watch::WatchersState>().stop_all();
             }
         });
 }

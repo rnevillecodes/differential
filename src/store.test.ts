@@ -11,7 +11,7 @@ import {
   type AppState,
 } from "./store";
 import type { TerminalSessionEvents } from "./terminal/sessions";
-import { changeSet, commit, fakeApi, flush, memoryStorage, summary } from "./test/fixtures";
+import { changeSet, commit, ctx, fakeApi, fakeWatcher, fileDiff, flush, hunk, memoryStorage, summary } from "./test/fixtures";
 
 describe("app store", () => {
   it("opens the repo from launch arguments and selects the first file", async () => {
@@ -1024,3 +1024,295 @@ describe("find", () => {
   });
 });
 
+
+describe("automatic updates", () => {
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  async function opened(over: Parameters<typeof fakeApi>[0] = {}, storage = memoryStorage()) {
+    const watcher = fakeWatcher();
+    const api = fakeApi({ ...watcher.api, ...over });
+    const store = createAppStore(api, storage);
+    await store.getState().openPath("C:/repo");
+    await flush();
+    return { api, store, watcher };
+  }
+
+  /** Every status the active file's load passes through while `run` executes. */
+  async function activeStatuses(store: ReturnType<typeof createAppStore>, run: () => Promise<unknown>) {
+    const seen: string[] = [];
+    const unsubscribe = store.subscribe((s) => {
+      const load = s.selectedId === null ? undefined : s.files[s.selectedId];
+      seen.push(load?.status ?? "none");
+    });
+    await run();
+    await flush();
+    unsubscribe();
+    return seen;
+  }
+
+  it("watches the opened repository", async () => {
+    const { api, store } = await opened();
+    expect(api.watchRepo).toHaveBeenCalledWith("C:/repo", expect.any(Function));
+    expect(store.getState().watchStatus).toEqual({ kind: "active" });
+  });
+
+  it("ignores events from a repository that is no longer open", async () => {
+    const { api, store, watcher } = await opened();
+    await store.getState().openPath("C:/other");
+    await flush();
+    expect(api.unwatchRepo).toHaveBeenCalledWith(1);
+    vi.mocked(api.listChanges).mockClear();
+    watcher.changed(true, false, 0);
+    await flush();
+    expect(api.listChanges).not.toHaveBeenCalled();
+    watcher.changed(true, false, 1);
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledWith("C:/other", "HEAD");
+  });
+
+  it("still opens the repository when it can't be watched", async () => {
+    const { store } = await opened({
+      watchRepo: vi.fn(async () => {
+        throw { kind: "io", message: "The system limit on watched folders was reached." };
+      }),
+    });
+    expect(store.getState().changes?.files).toHaveLength(2);
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().watchStatus).toEqual({
+      kind: "unavailable",
+      message: "The system limit on watched folders was reached.",
+    });
+  });
+
+  it("shows when watching stops working", async () => {
+    const { store, watcher } = await opened();
+    watcher.emit({ kind: "unavailable", message: "The repository folder no longer exists." });
+    expect(store.getState().watchStatus).toEqual({
+      kind: "unavailable",
+      message: "The repository folder no longer exists.",
+    });
+  });
+
+  it("refreshes in place without a loading state", async () => {
+    const { api, store, watcher } = await opened();
+    const shown = store.getState().files[0];
+    expect(shown.status).toBe("ready");
+    const pending = deferred<ReturnType<typeof changeSet>>();
+    vi.mocked(api.listChanges).mockReturnValueOnce(pending.promise);
+    const seen = await activeStatuses(store, async () => {
+      watcher.changed();
+      await flush();
+      expect(store.getState().loading).toBe(false);
+      pending.resolve(changeSet([summary(0, "a.ts", { additions: 5 }), summary(1, "b.ts")]));
+      await flush();
+    });
+    expect(seen).not.toContain("loading");
+    expect(store.getState().loading).toBe(false);
+    expect(store.getState().changes?.files[0].additions).toBe(5);
+  });
+
+  it("keeps the shown diff object unless its content changed", async () => {
+    const { api, store, watcher } = await opened();
+    const before = store.getState().files[0];
+    const changesBefore = store.getState().changes;
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().files[0]).toBe(before);
+    expect(store.getState().changes).toBe(changesBefore);
+
+    vi.mocked(api.fileDiff).mockResolvedValueOnce(fileDiff([hunk(1, 1, 1, 1, [ctx("x", 1, 1)])]));
+    watcher.changed();
+    await flush();
+    await flush();
+    const after = store.getState().files[0];
+    expect(after).not.toBe(before);
+    expect(after.status === "ready" && after.diff.hunks).toHaveLength(1);
+  });
+
+  it("merges changes reported during a refresh into one more refresh", async () => {
+    const { api, store, watcher } = await opened();
+    const first = deferred<ReturnType<typeof changeSet>>();
+    vi.mocked(api.listChanges).mockClear();
+    vi.mocked(api.listChanges).mockReturnValueOnce(first.promise);
+    watcher.changed();
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledTimes(1);
+    watcher.changed();
+    watcher.changed(false, true);
+    watcher.changed();
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledTimes(1);
+    first.resolve(changeSet([summary(0, "a.ts"), summary(1, "b.ts")]));
+    await flush();
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledTimes(2);
+    expect(store.getState().changes?.files).toHaveLength(2);
+  });
+
+  it("reloads refs and history only for git changes", async () => {
+    const { api, store, watcher } = await opened();
+    vi.mocked(api.listRefs).mockClear();
+    watcher.changed(true, false);
+    await flush();
+    expect(api.listRefs).not.toHaveBeenCalled();
+    watcher.changed(false, true);
+    await flush();
+    await flush();
+    expect(api.listRefs).toHaveBeenCalledTimes(1);
+    expect(store.getState().graph.stale).toBe(true);
+  });
+
+  it("reloads the shown history when a commit is made", async () => {
+    const { api, store, watcher } = await opened();
+    store.getState().toggleGraph();
+    await flush();
+    vi.mocked(api.listCommits).mockClear();
+    watcher.changed(true, true);
+    await flush();
+    expect(api.listCommits).toHaveBeenCalledWith("C:/repo", 0, GRAPH_PAGE_SIZE);
+  });
+
+  it("keeps what is shown when an automatic update fails", async () => {
+    const { api, store, watcher } = await opened();
+    const before = store.getState().changes;
+    vi.mocked(api.listChanges).mockRejectedValueOnce({ kind: "git", message: "index.lock exists" });
+    watcher.changed();
+    await flush();
+    expect(store.getState().changes).toBe(before);
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().files[0].status).toBe("ready");
+  });
+
+  it("shows an inline error when the base no longer resolves", async () => {
+    const { api, store, watcher } = await opened();
+    vi.mocked(api.listChanges).mockRejectedValueOnce({ kind: "badRevision", message: "could not resolve revision 'gone'" });
+    watcher.changed(false, true);
+    await flush();
+    expect(store.getState().baseError).toBe("could not resolve revision 'gone'");
+    expect(store.getState().error).toBeNull();
+  });
+
+  it("closes the tab of a deleted file", async () => {
+    const { api, store, watcher } = await opened({}, memoryStorage({ "differential.sidebarTab": "files" }));
+    store.getState().select(1, true);
+    store.getState().select(0, true);
+    await flush();
+    vi.mocked(api.listChanges).mockResolvedValueOnce(changeSet([summary(0, "b.ts")]));
+    vi.mocked(api.listFiles).mockResolvedValueOnce(["b.ts", "README.md"]);
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().tabs.map((t) => t.path)).toEqual(["b.ts"]);
+    expect(store.getState().activePath).toBe("b.ts");
+  });
+
+  it("does not change the active tab or open tabs", async () => {
+    const { api, store, watcher } = await opened();
+    store.getState().select(1);
+    await flush();
+    vi.mocked(api.listChanges).mockResolvedValueOnce(
+      changeSet([summary(0, "new.ts", { status: "untracked" }), summary(1, "a.ts"), summary(2, "b.ts")]),
+    );
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().activePath).toBe("b.ts");
+    expect(store.getState().selectedId).toBe(2);
+    expect(store.getState().tabs.map((t) => t.path)).toEqual(["b.ts"]);
+    // The carried diff moved to the file's new id.
+    expect(store.getState().files[2]?.status).toBe("ready");
+  });
+
+  it("waits for a visible load before refreshing", async () => {
+    const watcher = fakeWatcher();
+    const first = deferred<ReturnType<typeof changeSet>>();
+    const api = fakeApi({ ...watcher.api, listChanges: vi.fn(() => first.promise) });
+    const store = createAppStore(api, memoryStorage());
+    const opening = store.getState().openPath("C:/repo");
+    await flush();
+    watcher.changed();
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledTimes(1);
+    first.resolve(changeSet([summary(0, "a.ts")]));
+    await opening;
+    await flush();
+    expect(api.listChanges).toHaveBeenCalledTimes(2);
+    // The opening load still chose the first file.
+    expect(store.getState().activePath).toBe("a.ts");
+  });
+
+  it("manual refresh keeps the shown diff instead of a loading state", async () => {
+    const { store } = await opened();
+    const seen = await activeStatuses(store, () => store.getState().refresh());
+    expect(seen).not.toContain("loading");
+    expect(store.getState().files[0].status).toBe("ready");
+  });
+
+  it("keeps a large diff the user loaded", async () => {
+    const { api, store, watcher } = await opened({
+      listChanges: vi.fn(async () => changeSet([summary(0, "big.lock", { isLarge: true })])),
+    });
+    expect(store.getState().files[0].status).toBe("large");
+    store.getState().loadLarge(0);
+    await flush();
+    expect(store.getState().files[0].status).toBe("ready");
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().files[0].status).toBe("ready");
+    expect(api.fileDiff).toHaveBeenLastCalledWith("C:/repo", "abc123", expect.anything(), true);
+  });
+
+  it("re-reads a viewed unchanged file, keeping its contents meanwhile", async () => {
+    const { api, store, watcher } = await opened();
+    store.getState().openTreePath("README.md");
+    await flush();
+    const shown = viewed(store.getState())?.load;
+    expect(shown).toEqual({ status: "ready", content: "x\n" });
+    const pending = deferred<{ kind: "text"; content: string }>();
+    vi.mocked(api.viewFile).mockReturnValueOnce(pending.promise);
+    watcher.changed();
+    await flush();
+    expect(viewed(store.getState())?.load).toBe(shown);
+    pending.resolve({ kind: "text", content: "y\n" });
+    await flush();
+    expect(viewed(store.getState())?.load).toEqual({ status: "ready", content: "y\n" });
+  });
+
+  it("shows a viewed file's diff once it changes", async () => {
+    const { api, store, watcher } = await opened();
+    store.getState().openTreePath("README.md");
+    await flush();
+    vi.mocked(api.listChanges).mockResolvedValueOnce(changeSet([summary(0, "a.ts"), summary(1, "README.md")]));
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().activePath).toBe("README.md");
+    expect(store.getState().selectedId).toBe(1);
+    expect(viewed(store.getState())).toBeNull();
+    expect(store.getState().files[1]?.status).toBe("ready");
+  });
+
+  it("picks up files created by a terminal command without a refresh", async () => {
+    const { api, store, watcher } = await opened();
+    store.getState().toggleTerminal();
+    await flush();
+    vi.mocked(api.listChanges).mockResolvedValueOnce(
+      changeSet([summary(0, "a.ts"), summary(1, "b.ts"), summary(2, "made-by-shell.txt", { status: "untracked" })]),
+    );
+    watcher.changed();
+    await flush();
+    await flush();
+    expect(store.getState().changes?.files.map((f) => f.newPath)).toContain("made-by-shell.txt");
+    expect(api.terminalWrite).not.toHaveBeenCalled();
+  });
+});

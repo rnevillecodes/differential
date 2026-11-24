@@ -59,6 +59,13 @@ function useTokens(file: FileSummary, baseSha: string, oldContent: string | null
 
 export function DiffView({ file, baseSha, diff, oldContent, newContent, mode, active = true }: Props) {
   const [expansion, setExpansion] = useState<ExpansionState>({});
+  // Expanded ranges refer to this diff's line numbers: start over when the diff changes.
+  // (An update that changes nothing keeps the same diff object.)
+  const [expansionDiff, setExpansionDiff] = useState(diff);
+  if (expansionDiff !== diff) {
+    setExpansionDiff(diff);
+    setExpansion({});
+  }
   const tokens = useTokens(file, baseSha, oldContent, newContent);
   const { rows, gaps, maxColumns } = useMemo(
     () => buildRows({ diff, oldContent, newContent, expansion, mode }),
