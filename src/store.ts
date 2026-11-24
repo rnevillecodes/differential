@@ -230,6 +230,8 @@ export interface AppState {
   setFolderExpanded(path: string, open: boolean): void;
   /** Collapse every folder in the project tree. */
   collapseAll(): void;
+  /** Collapse `path` and forget every expanded folder below it. */
+  collapseSubtree(path: string): void;
   /** Expand every folder containing `path`. */
   reveal(path: string): void;
   /** Open a file from the project tree (its diff if changed, else its contents), like `select`. */
@@ -922,6 +924,13 @@ export function createAppStore(
 
       collapseAll() {
         if (get().expanded.size > 0) set({ expanded: new Set() });
+      },
+
+      collapseSubtree(path) {
+        const { expanded } = get();
+        const prefix = `${path}/`;
+        const next = new Set([...expanded].filter((p) => p !== path && !p.startsWith(prefix)));
+        if (next.size !== expanded.size) set({ expanded: next });
       },
 
       reveal(path) {

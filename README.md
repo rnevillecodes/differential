@@ -94,7 +94,7 @@ Press `Ctrl+F` to find text in the file or diff open in the current tab. If you 
 The sidebar can be hidden with the button at the left of the toolbar or `Ctrl+B`; whether it is shown is remembered. It has two tabs, and the last one used is remembered:
 
 - **Changes**: the changed files, with status and `+/-` line counts.
-- **Files**: the whole project as a folder tree (tracked files plus untracked files that are not ignored, and files deleted since the base). Changed files show their status letter; folders show how many changed files they contain. Selecting a changed file shows its diff; selecting an unchanged file shows its contents read-only. The tree updates when you refresh. The button beside the repository name collapses every folder.
+- **Files**: the whole project as a folder tree (tracked files plus untracked files that are not ignored, and files deleted since the base). Changed files show their status letter; folders show how many changed files they contain. Selecting a changed file shows its diff; selecting an unchanged file shows its contents read-only. The tree updates when you refresh. The button beside the repository name collapses every folder. Collapsing a folder remembers which of its subfolders were open; to close a folder and all its subfolders, hover its row and use the collapse button at the right end (shown when something below it is open), or press `Shift+←`.
 
 In the Files tree:
 
@@ -103,6 +103,7 @@ In the Files tree:
 | `↑` / `↓` | Move between rows |
 | `→` | Expand a folder, or move into an expanded one |
 | `←` | Collapse a folder, or move to the parent folder |
+| `Shift+←` | Collapse a folder and all its subfolders |
 | `Enter` | Open a file in a tab that stays, or toggle a folder |
 
 ### Terminal

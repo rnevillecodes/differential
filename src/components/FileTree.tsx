@@ -1,8 +1,8 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp } from "../store";
-import { buildTree, flatten, parentOf, type TreeRow } from "../tree/build";
-import { CollapseAllIcon, FilesIcon } from "./icons";
+import { ancestorsOf, buildTree, flatten, parentOf, type TreeRow } from "../tree/build";
+import { CollapseAllIcon, FilesIcon, FolderOpenIcon } from "./icons";
 import { SidebarEmpty } from "./SidebarEmpty";
 import { StatusBadge } from "./status";
 
@@ -20,6 +20,7 @@ export function FileTree() {
   const toggleFolder = useApp((s) => s.toggleFolder);
   const setFolderExpanded = useApp((s) => s.setFolderExpanded);
   const collapseAll = useApp((s) => s.collapseAll);
+  const collapseSubtree = useApp((s) => s.collapseSubtree);
   const setPickerOpen = useApp((s) => s.setRepoPickerOpen);
   const refresh = useApp((s) => s.refresh);
   const reveal = useApp((s) => s.reveal);
@@ -31,6 +32,15 @@ export function FileTree() {
   );
   const rows = useMemo(() => (tree ? flatten(tree, expanded) : []), [tree, expanded]);
   const indexOf = useMemo(() => new Map(rows.map((r, i) => [r.node.path, i])), [rows]);
+  // Folders with an expanded folder somewhere below them (remembered ones included).
+  const hasExpandedBelow = useMemo(() => {
+    const out = new Set<string>();
+    for (const p of expanded) for (const a of ancestorsOf(p)) out.add(a);
+    return out;
+  }, [expanded]);
+
+  // Whether the tree holds focus: the cursor outline and full-strength selection depend on it.
+  const [focused, setFocused] = useState(false);
 
   // Keyboard cursor; follows the selection when it changes elsewhere.
   const [active, setActive] = useState<string | null>(selectedPath);
@@ -135,6 +145,10 @@ export function FileTree() {
         break;
       case "ArrowLeft": {
         if (!row) return;
+        if (e.shiftKey) {
+          if (row.node.type === "dir") collapseSubtree(row.node.path);
+          break;
+        }
         if (row.node.type === "dir" && expanded.has(row.node.path)) {
           setFolderExpanded(row.node.path, false);
         } else {
@@ -173,26 +187,33 @@ export function FileTree() {
         </button>
       </div>
       <div
-        className="file-list-scroll"
+        className={`file-list-scroll${focused ? " tree-focused" : ""}`}
         ref={scrollRef}
         role="tree"
         aria-label="Files"
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+        }}
         aria-activedescendant={active !== null && indexOf.has(active) ? treeItemId(active) : undefined}
       >
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((item) => {
             const row = rows[item.index];
+            const isOpenDir = row.node.type === "dir" && expanded.has(row.node.path);
             return (
               <TreeRowView
                 key={row.node.path}
                 row={row}
                 top={item.start}
-                expanded={row.node.type === "dir" && expanded.has(row.node.path)}
+                expanded={isOpenDir}
+                canCollapseSubtree={isOpenDir && hasExpandedBelow.has(row.node.path)}
                 selected={row.node.path === selectedPath}
                 active={row.node.path === active}
                 onActivate={activate}
+                onCollapseSubtree={collapseSubtree}
               />
             );
           })}
@@ -210,16 +231,20 @@ const TreeRowView = memo(function TreeRowView({
   row,
   top,
   expanded,
+  canCollapseSubtree,
   selected,
   active,
   onActivate,
+  onCollapseSubtree,
 }: {
   row: TreeRow;
   top: number;
   expanded: boolean;
+  canCollapseSubtree: boolean;
   selected: boolean;
   active: boolean;
   onActivate: (row: TreeRow, pin?: boolean) => void;
+  onCollapseSubtree: (path: string) => void;
 }) {
   const { node, depth } = row;
   const isDir = node.type === "dir";
@@ -238,8 +263,9 @@ const TreeRowView = memo(function TreeRowView({
       title={node.path}
       data-testid="tree-row"
     >
-      <span className="chevron" aria-hidden="true">
-        {isDir ? (expanded ? "▾" : "▸") : ""}
+      <span className="tree-icon" aria-hidden="true">
+        {isDir &&
+          (expanded ? <FolderOpenIcon data-icon="folder-open" /> : <FilesIcon data-icon="folder-closed" />)}
       </span>
       <span className={`tree-name${isDir ? " dir-name" : ""}`}>{node.name}</span>
       {isDir && node.changedCount > 0 && (
@@ -248,6 +274,25 @@ const TreeRowView = memo(function TreeRowView({
         </span>
       )}
       {change && <StatusBadge status={change.status} />}
+      <span className="subtree-slot">
+        {canCollapseSubtree && (
+          <button
+            type="button"
+            className="icon-button subtree-toggle"
+            tabIndex={-1}
+            title="Collapse folder and subfolders"
+            aria-label="Collapse folder and subfolders"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCollapseSubtree(node.path);
+            }}
+            onDoubleClick={(e) => e.stopPropagation()}
+          >
+            <CollapseAllIcon />
+          </button>
+        )}
+      </span>
     </div>
   );
 });

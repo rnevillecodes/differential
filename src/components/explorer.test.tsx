@@ -137,6 +137,81 @@ describe("project tree", () => {
     expect(row("ui")).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("shows folder icons instead of carets, and no icon on files", async () => {
+    await renderApp();
+    const icon = (name: string) => row(name).querySelector(".tree-icon svg")?.getAttribute("data-icon") ?? null;
+    expect(icon("src")).toBe("folder-open");
+    expect(icon("assets")).toBe("folder-closed");
+    expect(icon("ui")).toBe("folder-closed");
+    expect(icon("a.ts")).toBeNull();
+    expect(row("a.ts").querySelector(".tree-icon")).not.toBeNull();
+    for (const r of treeRows()) expect(r.textContent).not.toMatch(/[▸▾]/);
+    fireEvent.click(row("ui"));
+    expect(icon("ui")).toBe("folder-open");
+  });
+
+  it("offers a collapse-subtree toggle only on open folders with open folders below", async () => {
+    const { store } = await renderApp();
+    const toggle = (name: string) => within(row(name)).queryByRole("button", { name: "Collapse folder and subfolders" });
+    // `src` is open but nothing below it is.
+    expect(toggle("src")).toBeNull();
+    fireEvent.click(row("ui"));
+    expect(toggle("src")).not.toBeNull();
+    expect(toggle("ui")).toBeNull();
+    expect(toggle("assets")).toBeNull();
+    expect(toggle("README.md")).toBeNull();
+    // Every row keeps the slot, so badges stay aligned.
+    for (const r of treeRows()) expect(r.querySelector(".subtree-slot")).not.toBeNull();
+
+    fireEvent.click(toggle("src")!);
+    expect(row("src")).toHaveAttribute("aria-expanded", "false");
+    expect(store.getState().activePath).toBe("src/a.ts");
+    fireEvent.click(row("src"));
+    expect(row("ui")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("collapses a subtree with Shift+Left, and plain Left still remembers subfolders", async () => {
+    const { store } = await renderApp();
+    const tree = screen.getByRole("tree");
+    fireEvent.click(row("ui")); // expands ui, cursor on ui
+    fireEvent.keyDown(tree, { key: "ArrowUp" });
+    expect(row("src")).toHaveClass("active");
+
+    // Plain Left collapses only `src`; reopening shows `ui` still open.
+    fireEvent.keyDown(tree, { key: "ArrowLeft" });
+    fireEvent.keyDown(tree, { key: "ArrowRight" });
+    expect(row("ui")).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.keyDown(tree, { key: "ArrowLeft", shiftKey: true });
+    expect(row("src")).toHaveAttribute("aria-expanded", "false");
+    fireEvent.keyDown(tree, { key: "ArrowRight" });
+    expect(row("ui")).toHaveAttribute("aria-expanded", "false");
+
+    // On a file, Shift+Left does nothing.
+    fireEvent.click(row("ui"));
+    fireEvent.click(row("b.tsx"));
+    const expanded = store.getState().expanded;
+    fireEvent.keyDown(tree, { key: "ArrowLeft", shiftKey: true });
+    expect(store.getState().expanded).toBe(expanded);
+    expect(row("b.tsx")).toHaveClass("active");
+  });
+
+  it("marks the tree as focused only while it holds focus", async () => {
+    await renderApp();
+    const tree = screen.getByRole("tree");
+    expect(tree).not.toHaveClass("tree-focused");
+    fireEvent.focus(tree);
+    expect(tree).toHaveClass("tree-focused");
+    // Focus moving within the tree is not a blur.
+    fireEvent.blur(tree, { relatedTarget: row("a.ts") });
+    expect(tree).toHaveClass("tree-focused");
+    fireEvent.blur(tree, { relatedTarget: document.body });
+    expect(tree).not.toHaveClass("tree-focused");
+    // The cursor position survives the blur.
+    expect(row("a.ts")).toHaveClass("active");
+    expect(row("a.ts")).toHaveAttribute("aria-selected", "true");
+  });
+
   it("offers no controls that modify files", async () => {
     await renderApp();
     const labels = screen.getAllByRole("button").map((b) => b.textContent ?? "");

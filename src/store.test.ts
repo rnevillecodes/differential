@@ -422,6 +422,21 @@ describe("project explorer state", () => {
     expect(store.getState().expanded.size).toBe(0);
   });
 
+  it("collapses a folder together with every expanded folder below it", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    for (const p of ["src", "src/ui", "src/ui/widgets", "src2", "lib", "lib/core"]) {
+      store.getState().setFolderExpanded(p, true);
+    }
+    // A remembered entry under a collapsed child is cleared too.
+    store.getState().setFolderExpanded("src/ui", false);
+    store.getState().collapseSubtree("src");
+    expect([...store.getState().expanded].sort()).toEqual(["lib", "lib/core", "src2"]);
+    const before = store.getState().expanded;
+    store.getState().collapseSubtree("src");
+    store.getState().collapseSubtree("docs");
+    expect(store.getState().expanded).toBe(before);
+  });
+
   it("opens a changed path as a diff and an unchanged path as contents", async () => {
     const api = fakeApi();
     const store = createAppStore(api, memoryStorage());
