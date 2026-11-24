@@ -40,6 +40,7 @@ export function Toolbar() {
       <button onClick={() => void refresh()} disabled={!repo || loading} title="Refresh (Ctrl+R)">
         {loading ? "Loading…" : "Refresh"}
       </button>
+      <WatchNotice />
 
       <div className="segmented" role="group" aria-label="View mode" title="Toggle view (Ctrl+\)">
         <button aria-pressed={viewMode === "unified"} onClick={() => setViewMode("unified")}>
@@ -76,7 +77,23 @@ export function Toolbar() {
   );
 }
 
-/** The checked-out branch, refreshed with the refs (on open and on refresh). */
+/** Shown only when the open repository can't be watched, so changes need a manual refresh. */
+function WatchNotice() {
+  const status = useApp((s) => s.watchStatus);
+  if (status?.kind !== "unavailable") return null;
+  return (
+    <span
+      className="watch-notice"
+      role="status"
+      aria-label={`Automatic updates unavailable: ${status.message}`}
+      title={`${status.message} Press Refresh (Ctrl+R) to see changes.`}
+    >
+      Automatic updates unavailable
+    </span>
+  );
+}
+
+/** The checked-out branch, kept current with the refs. */
 function BranchBadge() {
   const repo = useApp((s) => s.repo);
   const branch = useApp((s) => currentBranch(s.refs));

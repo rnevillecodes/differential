@@ -169,3 +169,33 @@ fn terminal_spawn_with_missing_directory_is_an_error_payload() {
     assert_eq!(err["kind"], "io");
     assert!(err["message"].as_str().unwrap().contains("not a directory"), "{err}");
 }
+
+#[test]
+fn watch_repo_replaces_the_current_watch_and_ignores_stale_unwatch() {
+    use differential_lib::watch::WatchersState;
+    use tauri::Manager;
+    let a = TestRepo::with_files(&[("a.txt", "a\n")]);
+    let b = TestRepo::with_files(&[("b.txt", "b\n")]);
+    let (app, w) = app(InitialArgs::default());
+    let watchers = app.state::<WatchersState>().inner().clone();
+
+    let id_a = invoke(&w, "watch_repo", json!({ "root": a.path(), "onEvent": "__CHANNEL__:21" })).unwrap();
+    assert_eq!(watchers.current_id(), id_a.as_u64().map(|v| v as u32));
+    let id_b = invoke(&w, "watch_repo", json!({ "root": b.path(), "onEvent": "__CHANNEL__:22" })).unwrap();
+    assert_ne!(id_a, id_b);
+    assert_eq!(watchers.current_id(), id_b.as_u64().map(|v| v as u32));
+
+    // A stale id leaves the new watch running; the current id stops it.
+    assert_eq!(invoke(&w, "unwatch_repo", json!({ "id": id_a })).unwrap(), Value::Null);
+    assert_eq!(watchers.current_id(), id_b.as_u64().map(|v| v as u32));
+    assert_eq!(invoke(&w, "unwatch_repo", json!({ "id": id_b })).unwrap(), Value::Null);
+    assert_eq!(watchers.current_id(), None);
+}
+
+#[test]
+fn watch_repo_outside_a_repository_is_an_error_payload() {
+    let (_app, w) = app(InitialArgs::default());
+    let dir = tempfile::tempdir().unwrap();
+    let err = invoke(&w, "watch_repo", json!({ "root": dir.path(), "onEvent": "__CHANNEL__:23" })).unwrap_err();
+    assert_eq!(err["kind"], "notARepo", "{err}");
+}

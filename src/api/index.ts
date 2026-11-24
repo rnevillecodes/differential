@@ -10,6 +10,7 @@ import type { FileDiff } from "../model/FileDiff";
 import type { FileSummary } from "../model/FileSummary";
 import type { FileView } from "../model/FileView";
 import type { RefInfo } from "../model/RefInfo";
+import type { RepoEvent } from "../model/RepoEvent";
 import type { RepoInfo } from "../model/RepoInfo";
 import type { Side } from "../model/Side";
 import type { TerminalExit } from "../model/TerminalExit";
@@ -53,6 +54,13 @@ export interface Api {
   terminalResize(id: number, cols: number, rows: number): Promise<void>;
   /** End a session's shell and its programs; unknown ids are ignored. */
   terminalClose(id: number): Promise<void>;
+  /**
+   * Watch the repository at `root` for changes, replacing any current watch. `onEvent` receives
+   * one event per settled burst of changes. Resolves to the watch id; rejects if it can't watch.
+   */
+  watchRepo(root: string, onEvent: (event: RepoEvent) => void): Promise<number>;
+  /** Stop watch `id` if it is still the current one; stale ids are ignored. */
+  unwatchRepo(id: number): Promise<void>;
 }
 
 /** Raw channel messages arrive as an ArrayBuffer (or a byte array from older runtimes). */
@@ -87,6 +95,12 @@ export const tauriApi: Api = {
   terminalWrite: (id, data) => invoke("terminal_write", { id, data }),
   terminalResize: (id, cols, rows) => invoke("terminal_resize", { id, cols, rows }),
   terminalClose: (id) => invoke("terminal_close", { id }),
+  watchRepo: (root, onEvent) => {
+    const channel = new Channel<RepoEvent>();
+    channel.onmessage = onEvent;
+    return invoke("watch_repo", { root, onEvent: channel });
+  },
+  unwatchRepo: (id) => invoke("unwatch_repo", { id }),
 };
 
 export function isErrorPayload(e: unknown): e is ErrorPayload {

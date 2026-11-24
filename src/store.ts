@@ -48,6 +48,25 @@ export interface Tab {
   preview: boolean;
 }
 
+/** Whether the open repository is being watched for changes (null without a repository). */
+export type WatchStatus = { kind: "active" } | { kind: "unavailable"; message: string };
+
+/** What changed on disk, as reported by the repository watcher. */
+export interface ChangeKinds {
+  worktree: boolean;
+  git: boolean;
+}
+
+/** Same JSON shape: for keeping an unchanged object so React doesn't re-render. */
+function sameJson(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Two diffs show the same thing (their file ids may differ after the list changed). */
+function sameDiff(a: FileDiff, b: FileDiff): boolean {
+  return a === b || sameJson({ ...a, fileId: 0 }, { ...b, fileId: 0 });
+}
+
 export type TerminalStatus =
   | { kind: "starting" }
   | { kind: "running" }
@@ -164,6 +183,8 @@ export interface AppState {
   activePath: string | null;
   /** Contents of open unchanged files, by path. */
   views: Record<string, ViewLoad>;
+  /** Whether automatic updates work for the open repository; null without a repository. */
+  watchStatus: WatchStatus | null;
 
   /** Repository roots opened before, most recent first. */
   recentRepos: string[];
@@ -410,6 +431,14 @@ export function createAppStore(
   // Incremented when the history reloads from the first page or the repository changes;
   // page responses from an older generation are dropped.
   let graphGen = 0;
+  // Incremented on every repository open; events from an older watch are dropped.
+  let watchGen = 0;
+  let watchId: number | null = null;
+  // Automatic refreshes run one at a time; changes reported meanwhile are merged into one more run.
+  let autoRunning = false;
+  let autoPending: ChangeKinds | null = null;
+  // The visible (non-quiet) change-set load in flight, which automatic refreshes wait for.
+  let visibleLoad: Promise<boolean> | null = null;
 
   return createStore<AppState>((set, get) => {
     /** Whether the project listing should be (re)loaded with the change set. */
@@ -421,15 +450,16 @@ export function createAppStore(
         (e) => ({ error: toErrorPayload(e) }),
       );
 
-    const applyFiles = (result: { files: string[] } | { error: ErrorPayload }) => {
+    const applyFiles = (result: { files: string[] } | { error: ErrorPayload }, quiet = false) => {
       if ("error" in result) {
-        set({ filesError: result.error });
+        // A failed automatic update keeps the listing on screen; the next change retries.
+        if (!quiet) set({ filesError: result.error });
         return;
       }
-      const { changes, expanded } = get();
+      const { changes, expanded, projectFiles } = get();
       const folders = foldersOf([...result.files, ...(changes?.files.map(displayPath) ?? [])]);
       set({
-        projectFiles: result.files,
+        projectFiles: projectFiles && sameJson(projectFiles, result.files) ? projectFiles : result.files,
         filesError: null,
         expanded: new Set([...expanded].filter((p) => folders.has(p))),
       });
@@ -448,14 +478,39 @@ export function createAppStore(
       );
     };
 
-    const loadChanges = async (root: string, base: string, keepTabs: boolean): Promise<boolean> => {
+    interface LoadOptions {
+      /** An automatic update: no loading state, and failures keep what is shown. */
+      quiet?: boolean;
+      /** Keep the active tab's loaded diff on screen until its replacement arrives. */
+      carry?: boolean;
+    }
+
+    const loadChanges = (root: string, base: string, keepTabs: boolean, opts: LoadOptions = {}): Promise<boolean> => {
+      const run = loadChangesNow(root, base, keepTabs, opts);
+      if (!opts.quiet) {
+        visibleLoad = run;
+        const clear = () => {
+          if (visibleLoad === run) visibleLoad = null;
+        };
+        run.then(clear, clear);
+      }
+      return run;
+    };
+
+    const loadChangesNow = async (
+      root: string,
+      base: string,
+      keepTabs: boolean,
+      { quiet = false, carry = false }: LoadOptions,
+    ): Promise<boolean> => {
       const gen = ++generation;
-      set({ loading: true });
+      if (!quiet) set({ loading: true });
       const filesPromise = wantFiles() ? fetchFiles(root) : null;
       try {
-        const changes = await api.listChanges(root, base);
+        const fetched = await api.listChanges(root, base);
         if (gen !== generation) return false;
         const prev = get();
+        const changes = carry && prev.changes && sameJson(prev.changes, fetched) ? prev.changes : fetched;
         let tabs = keepTabs ? prev.tabs : [];
         let activePath = keepTabs ? prev.activePath : null;
         if (!keepTabs && changes.files.length > 0) {
@@ -463,26 +518,30 @@ export function createAppStore(
           tabs = [{ path: activePath, preview: true }];
         }
         const activeChange = activePath === null ? undefined : changeAt(changes, activePath);
-        // Diffs are keyed by id, so they all reload. Keep the active unchanged file's
-        // contents on screen while it is re-read; other tabs reload when activated.
+        // Diffs are keyed by id, so they all reload. The active tab keeps showing what it shows
+        // while it is re-read (a carried diff, or an unchanged file's contents); other tabs
+        // reload when activated.
+        const oldChange = carry && activePath !== null ? changeAt(prev.changes, activePath) : undefined;
+        const carried = activeChange && oldChange ? prev.files[oldChange.id] : undefined;
         const keptView = activePath !== null && !activeChange ? prev.views[activePath] : undefined;
         set({
           changes,
           base: changes.baseRef,
-          files: {},
+          files: carried && activeChange ? { [activeChange.id]: carried } : {},
           baseError: null,
           error: null,
-          loading: false,
+          loading: quiet ? prev.loading : false,
           tabs,
           activePath,
           selectedId: activeChange?.id ?? null,
           views: keptView ? { [activePath!]: keptView } : {},
         });
-        if (activeChange) loadFile(activeChange.id, false);
+        // A large diff the user chose to load stays loaded.
+        if (activeChange) loadFile(activeChange.id, carried?.status === "ready" && activeChange.isLarge);
         if (filesPromise) {
           const result = await filesPromise;
           if (gen !== generation) return true;
-          applyFiles(result);
+          applyFiles(result, quiet);
           closeVanished();
         }
         const active = get().activePath;
@@ -492,12 +551,75 @@ export function createAppStore(
         if (gen !== generation) return false;
         const err = toErrorPayload(e);
         if (err.kind === "badRevision" && get().changes) {
-          set({ baseError: err.message, loading: false });
-        } else {
+          set({ baseError: err.message, loading: quiet ? get().loading : false });
+        } else if (!quiet) {
           set({ error: err, loading: false });
         }
+        // A failed automatic update keeps what is shown; the next change retries.
         return false;
       }
+    };
+
+    /** Refresh in place for changes the watcher reported; see `ChangeKinds`. */
+    const autoRefresh = async (kinds: ChangeKinds) => {
+      autoPending = autoPending
+        ? { worktree: autoPending.worktree || kinds.worktree, git: autoPending.git || kinds.git }
+        : kinds;
+      if (autoRunning) return;
+      autoRunning = true;
+      try {
+        while (autoPending) {
+          // Let a visible load (opening, base change, manual refresh) finish first.
+          while (visibleLoad) await visibleLoad.catch(() => false);
+          const pending: ChangeKinds | null = autoPending;
+          autoPending = null;
+          const { repo, base, changes } = get();
+          if (!pending || !repo || !changes) break;
+          const refsLoaded = pending.git ? loadRefs(repo.root) : null;
+          if (pending.git) invalidateGraph();
+          await loadChanges(repo.root, base, true, { quiet: true, carry: true });
+          await refsLoaded;
+        }
+      } finally {
+        autoRunning = false;
+      }
+    };
+
+    const stopWatching = () => {
+      watchGen++;
+      autoPending = null;
+      if (watchId !== null) {
+        const id = watchId;
+        watchId = null;
+        api.unwatchRepo(id).catch(() => {
+          // already gone
+        });
+      }
+    };
+
+    /** Watch `root`, replacing any current watch; its events refresh the app in place. */
+    const startWatching = (root: string) => {
+      stopWatching();
+      const gen = watchGen;
+      set({ watchStatus: { kind: "active" } });
+      api
+        .watchRepo(root, (event) => {
+          if (gen !== watchGen) return;
+          if (event.kind === "unavailable") {
+            set({ watchStatus: { kind: "unavailable", message: event.message } });
+          } else {
+            void autoRefresh({ worktree: event.worktree, git: event.git });
+          }
+        })
+        .then(
+          (id) => {
+            if (gen === watchGen) watchId = id;
+            else api.unwatchRepo(id).catch(() => {});
+          },
+          (e) => {
+            if (gen === watchGen) set({ watchStatus: { kind: "unavailable", message: toErrorPayload(e).message } });
+          },
+        );
     };
 
     /** Load the listing outside a change-set load (first switch to the Files tab). */
@@ -510,6 +632,10 @@ export function createAppStore(
       });
     };
 
+    /**
+     * Load a changed file's diff and contents. A diff already on screen stays there until the
+     * new one arrives, and is kept as is when nothing in it changed.
+     */
     const loadFile = (id: number, force: boolean) => {
       const { changes, repo } = get();
       if (!changes || !repo) return;
@@ -524,7 +650,7 @@ export function createAppStore(
         return;
       }
       const gen = generation;
-      setFile(id, { status: "loading" });
+      if (get().files[id]?.status !== "ready") setFile(id, { status: "loading" });
       const root = changes.repoRoot;
       const sha = changes.baseSha;
       const oldSide = file.status === "added" || file.status === "untracked" ? null : file.oldPath;
@@ -535,7 +661,14 @@ export function createAppStore(
         newSide ? api.fileContent(root, sha, newSide, "worktree") : Promise.resolve(null),
       ]).then(
         ([diff, oldContent, newContent]) => {
-          if (gen === generation) setFile(id, { status: "ready", diff, oldContent, newContent });
+          if (gen !== generation) return;
+          const shown = get().files[id];
+          const unchanged =
+            shown?.status === "ready" &&
+            shown.oldContent === oldContent &&
+            shown.newContent === newContent &&
+            sameDiff(shown.diff, diff);
+          if (!unchanged) setFile(id, { status: "ready", diff, oldContent, newContent });
         },
         (e) => {
           if (gen === generation) setFile(id, { status: "error", error: toErrorPayload(e) });
@@ -559,7 +692,10 @@ export function createAppStore(
       const live = () => viewLatest.get(path) === token && get().tabs.some((t) => t.path === path);
       api.viewFile(repo.root, path, force).then(
         (v) => {
-          if (live()) setView(path, toViewLoad(v));
+          if (!live()) return;
+          const next = toViewLoad(v);
+          // Keep the shown object when the contents are the same, so nothing re-renders.
+          if (!sameJson(get().views[path], next)) setView(path, next);
         },
         (e) => {
           if (live()) setView(path, { status: "error", error: toErrorPayload(e) });
@@ -761,6 +897,7 @@ export function createAppStore(
       tabs: [],
       activePath: null,
       views: {},
+      watchStatus: null,
       recentRepos: readRecent(storage),
       repoPickerOpen: false,
       terminalOpen: storage.get(TERMINAL_OPEN_KEY) === "true",
@@ -818,10 +955,21 @@ export function createAppStore(
         try {
           repo = await api.openRepo(path);
         } catch (e) {
-          set({ error: toErrorPayload(e), loading: false, repo: null, changes: null, selectedId: null, files: {} });
+          stopWatching();
+          set({
+            error: toErrorPayload(e),
+            loading: false,
+            repo: null,
+            changes: null,
+            selectedId: null,
+            files: {},
+            watchStatus: null,
+          });
           return;
         }
         set({ repo, changes: null, selectedId: null, files: {} });
+        // Watch before loading, so changes made while the diff loads are not missed.
+        startWatching(repo.root);
         setRecent(
           [repo.root, ...get().recentRepos.filter((r) => !sameRoot(r, repo.root))].slice(0, MAX_RECENT_REPOS),
         );
@@ -849,7 +997,7 @@ export function createAppStore(
         if (!repo) return;
         const refsLoaded = loadRefs(repo.root);
         invalidateGraph();
-        await loadChanges(repo.root, base, true);
+        await loadChanges(repo.root, base, true, { carry: true });
         await refsLoaded;
       },
 

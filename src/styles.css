@@ -500,6 +500,18 @@ button:focus-visible {
 .ref-note.error {
   color: var(--danger);
 }
+.watch-notice {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .toolbar .base-error {
   color: var(--danger);
   font-size: 12px;

@@ -177,7 +177,9 @@ function ChangedFile({
   } else {
     body = (
       <DiffView
-        key={`${changes.baseSha}:${file.id}:${path}`}
+        // Keyed by path only, so an update that moves the base or reorders the list keeps the
+        // view (and its scroll position) instead of remounting it.
+        key={path}
         file={file}
         baseSha={changes.baseSha}
         diff={load.diff}

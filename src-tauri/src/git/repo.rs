@@ -93,6 +93,35 @@ pub fn resolve_base(git: &Git, root: &Path, base: &str) -> Result<String> {
     }
 }
 
+/// The git directories of the repository at `root`, as absolute paths.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitDirs {
+    /// This worktree's git directory: `HEAD` and `index` live here.
+    pub git_dir: PathBuf,
+    /// The directory shared by all worktrees: refs, `packed-refs`, `info/`, objects.
+    /// Equal to `git_dir` except in a linked worktree.
+    pub common_dir: PathBuf,
+}
+
+/// Resolve the git directory and common directory of the repository at `root`.
+pub fn git_dirs(git: &Git, root: &Path) -> Result<GitDirs> {
+    let out = git.run_text(root, &["rev-parse", "--absolute-git-dir", "--git-common-dir"])?;
+    let mut lines = out.lines().map(str::trim);
+    let (Some(git_dir), Some(common)) = (lines.next(), lines.next()) else {
+        return Err(AppError::Git(format!("unexpected rev-parse output: {out}")));
+    };
+    let git_dir = PathBuf::from(git_dir);
+    // `--git-common-dir` may be relative to the current directory.
+    let common = PathBuf::from(common);
+    let common_dir = if common.is_absolute() { common } else { root.join(common) };
+    Ok(GitDirs { git_dir: canonical(&git_dir), common_dir: canonical(&common_dir) })
+}
+
+/// `path` with symlinks and `..` resolved, or unchanged if that fails.
+pub fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

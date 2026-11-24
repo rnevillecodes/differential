@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { createAppStore } from "../store";
-import { add, changeSet, ctx, fakeApi, fileDiff, flush, hunk, memoryStorage, rem, summary } from "../test/fixtures";
+import { add, changeSet, ctx, fakeApi, fakeWatcher, fileDiff, flush, hunk, memoryStorage, rem, summary } from "../test/fixtures";
 
 async function renderApp(api = fakeApi()) {
   const store = createAppStore(api, memoryStorage());
@@ -112,6 +112,39 @@ describe("diff view", () => {
     fireEvent.click(within(gap).getByText("Expand all"));
     expect(screen.queryByTestId("gap-row")).toBeNull();
     expect(screen.getAllByTestId("diff-row").at(-1)).toHaveTextContent("more");
+  });
+
+  it("keeps the view, its scroll and expansion across an update that leaves the diff alone", async () => {
+    const watcher = fakeWatcher();
+    const api = fakeApi({ ...diffApi(), ...watcher.api });
+    const { store } = await renderApp(api);
+    fireEvent.click(within(screen.getByTestId("gap-row")).getByText("Expand all"));
+    const scroller = screen.getByTestId("diff-scroll");
+    scroller.scrollTop = 40;
+
+    // A commit moved the base and a new file now sorts first: a.ts gets a new id.
+    vi.mocked(api.listChanges).mockResolvedValue(
+      changeSet([summary(0, "0-new.ts", { status: "untracked" }), summary(1, "a.ts")], { baseSha: "def999" }),
+    );
+    await act(async () => {
+      watcher.changed(true, true);
+      await flush();
+      await flush();
+    });
+    expect(store.getState().selectedId).toBe(1);
+    expect(screen.getByTestId("diff-scroll")).toBe(scroller);
+    expect(scroller.scrollTop).toBe(40);
+    expect(screen.queryByTestId("gap-row")).toBeNull();
+
+    // The file itself changed: the expansion starts over, the view stays.
+    vi.mocked(api.fileDiff).mockResolvedValue(fileDiff([hunk(1, 1, 1, 1, [rem("const timeout = 30;", 1), add("const timeout = 90;", 1)])]));
+    await act(async () => {
+      watcher.changed();
+      await flush();
+      await flush();
+    });
+    expect(screen.getByTestId("diff-scroll")).toBe(scroller);
+    expect(screen.getByTestId("gap-row")).toBeInTheDocument();
   });
 
   it("renders paired rows in split view", async () => {
