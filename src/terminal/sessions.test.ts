@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TerminalExit } from "../model/TerminalExit";
 import { fakeApi, flush } from "../test/fixtures";
 import { FakeTerminal } from "../test/xtermMock";
-import { createTerminalSessions, isToggleKey, type TerminalSessionEvents } from "./sessions";
+import { createTerminalSessions, isToggleKey, SHIFT_ENTER, type TerminalSessionEvents } from "./sessions";
 import { applyTheme } from "./theme";
 
 function setup(spawn?: () => Promise<number>) {
@@ -153,6 +153,27 @@ describe("terminal sessions", () => {
     expect(term.keyHandler!(key("KeyV"))).toBe(false);
     await flush();
     expect(term.pasted).toEqual(["pasted"]);
+  });
+
+  it("sends ESC CR for Shift+Enter so prompts can insert a newline", async () => {
+    const { api, sessions, host } = setup();
+    sessions.attach(1, "C:/repo", host);
+    await flush();
+    const term = FakeTerminal.instances[0];
+    const shiftEnter = (type: string) =>
+      new KeyboardEvent(type, { key: "Enter", code: "Enter", shiftKey: true, cancelable: true });
+
+    const down = shiftEnter("keydown");
+    expect(term.keyHandler!(down)).toBe(false);
+    expect(down.defaultPrevented).toBe(true);
+    expect(term.keyHandler!(shiftEnter("keypress"))).toBe(false);
+    expect(term.keyHandler!(shiftEnter("keyup"))).toBe(false);
+    expect(api.terminalWrite).toHaveBeenCalledTimes(1);
+    expect(api.terminalWrite).toHaveBeenCalledWith(7, SHIFT_ENTER);
+
+    // Plain Enter and other modified Enters are left to xterm.
+    expect(term.keyHandler!(new KeyboardEvent("keydown", { key: "Enter", code: "Enter" }))).toBe(true);
+    expect(term.keyHandler!(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, ctrlKey: true }))).toBe(true);
   });
 
   it("recognises the panel toggle key by its physical position", () => {
