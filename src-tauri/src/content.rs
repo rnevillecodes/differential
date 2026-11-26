@@ -11,6 +11,8 @@ pub mod limits {
     pub const MAX_CHANGED_LINES: u32 = 10_000;
     /// Size of either version, in bytes.
     pub const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
+    /// Size of an image read for display in rendered Markdown, in bytes.
+    pub const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
     /// Bytes inspected for a NUL to classify a file as binary (git's heuristic).
     pub const BINARY_SNIFF_BYTES: usize = 8000;
 }

@@ -18,6 +18,7 @@ pub fn configure<R: tauri::Runtime>(
 ) -> tauri::Builder<R> {
     builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(args)
         .manage(commands::Terminals::default())
         .manage(watch::WatchersState::default())
@@ -29,6 +30,7 @@ pub fn configure<R: tauri::Runtime>(
             commands::file_content,
             commands::list_files,
             commands::view_file,
+            commands::read_image,
             commands::list_refs,
             commands::list_commits,
             commands::terminal_spawn,

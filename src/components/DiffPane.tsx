@@ -1,12 +1,16 @@
-import { memo } from "react";
+import { lazy, memo, Suspense } from "react";
+import { isMarkdown } from "../highlight/languages";
 import type { ChangeSet } from "../model/ChangeSet";
 import type { FileSummary } from "../model/FileSummary";
-import { changeAt, displayPath, useApp, type FileLoad, type ViewLoad, type ViewMode } from "../store";
+import { changeAt, displayPath, useApp, type FileLoad, type MarkdownMode, type ViewLoad, type ViewMode } from "../store";
 import { DiffView } from "./DiffView";
 import { FileView } from "./FileView";
 import { FindBar } from "./FindBar";
 import { LogoMark } from "./icons";
 import { TabBar, tabId, tabPanelId } from "./TabBar";
+
+// Loaded on first use, so the Markdown renderer costs nothing until a Markdown file is opened.
+const MarkdownView = lazy(() => import("./MarkdownView"));
 
 const ERROR_TITLES: Record<string, string> = {
   gitNotFound: "Git not found",
@@ -99,6 +103,8 @@ const TabPanel = memo(function TabPanel({ path, active }: { path: string; active
   const viewMode = useApp((s) => s.viewMode);
   const loadLarge = useApp((s) => s.loadLarge);
   const loadViewAnyway = useApp((s) => s.loadViewAnyway);
+  const markdownMode = useApp((s) => s.tabs.find((t) => t.path === path)?.markdownMode ?? "rendered");
+  const toggleMarkdownMode = useApp((s) => s.toggleMarkdownMode);
 
   return (
     <div
@@ -111,7 +117,14 @@ const TabPanel = memo(function TabPanel({ path, active }: { path: string; active
       {file && changes ? (
         <ChangedFile file={file} changes={changes} load={load} mode={viewMode} active={active} onLoadLarge={loadLarge} />
       ) : (
-        <UnchangedFile path={path} load={view} active={active} onLoadAnyway={() => loadViewAnyway(path)} />
+        <UnchangedFile
+          path={path}
+          load={view}
+          active={active}
+          markdownMode={markdownMode}
+          onToggleMarkdown={() => toggleMarkdownMode(path)}
+          onLoadAnyway={() => loadViewAnyway(path)}
+        />
       )}
     </div>
   );
@@ -216,13 +229,19 @@ function UnchangedFile({
   path,
   load,
   active,
+  markdownMode,
+  onToggleMarkdown,
   onLoadAnyway,
 }: {
   path: string;
   load: ViewLoad | undefined;
   active: boolean;
+  markdownMode: MarkdownMode;
+  onToggleMarkdown: () => void;
   onLoadAnyway: () => void;
 }) {
+  const markdown = isMarkdown(path) && load?.status === "ready";
+  const rendered = markdown && markdownMode === "rendered";
   let body: React.ReactNode;
   switch (load?.status) {
     case undefined:
@@ -230,7 +249,14 @@ function UnchangedFile({
       body = <div className="message">Loading…</div>;
       break;
     case "ready":
-      body = <FileView key={path} path={path} content={load.content} active={active} />;
+      body = rendered ? (
+        <Suspense fallback={<div className="message">Loading…</div>}>
+          {/* Keyed by path only, so new contents re-render in place and keep the scroll position. */}
+          <MarkdownView key={path} path={path} content={load.content} active={active} />
+        </Suspense>
+      ) : (
+        <FileView key={path} path={path} content={load.content} active={active} />
+      );
       break;
     case "binary":
       body = (
@@ -279,6 +305,16 @@ function UnchangedFile({
       <div className="diff-header">
         <span className="diff-status status-unchanged">unchanged</span>
         <span className="diff-path">{path}</span>
+        {markdown && (
+          <button
+            className="header-toggle"
+            onClick={onToggleMarkdown}
+            aria-pressed={!rendered}
+            title={rendered ? "Show the Markdown source" : "Show the rendered document"}
+          >
+            {rendered ? "Source" : "Rendered"}
+          </button>
+        )}
       </div>
       {body}
     </div>

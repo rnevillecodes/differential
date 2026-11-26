@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { HighlightClient, MAX_HIGHLIGHT_LINES, type WorkerLike } from "./client";
-import { languageFor } from "./languages";
+import { isMarkdown, languageFor, languageForFence } from "./languages";
 import { hashString, segments, type LineTokens } from "./tokens";
 import type { HighlightRequest } from "./worker";
 
@@ -18,6 +18,34 @@ describe("languageFor", () => {
   it("returns null for unknown or missing extensions", () => {
     expect(languageFor("notes.xyz123")).toBeNull();
     expect(languageFor("LICENSE")).toBeNull();
+  });
+});
+
+describe("isMarkdown", () => {
+  it("matches .md and .markdown in any case, but not .mdx", () => {
+    expect(isMarkdown("README.md")).toBe(true);
+    expect(isMarkdown("docs/NOTES.MARKDOWN")).toBe(true);
+    expect(isMarkdown("page.mdx")).toBe(false);
+    expect(isMarkdown("main.ts")).toBe(false);
+    expect(isMarkdown("md")).toBe(false);
+  });
+});
+
+describe("languageForFence", () => {
+  it("accepts extensions, language ids and aliases", () => {
+    expect(languageForFence("ts")).toBe("typescript");
+    expect(languageForFence("typescript")).toBe("typescript");
+    expect(languageForFence("py")).toBe("python");
+    expect(languageForFence("Rust")).toBe("rust");
+    expect(languageForFence("sh {title=run}")).toBe("shellscript");
+    expect(languageForFence("shell")).toBe("shellscript");
+  });
+
+  it("returns null for unknown, plain-text or empty info strings", () => {
+    expect(languageForFence("nosuchlang")).toBeNull();
+    expect(languageForFence("text")).toBeNull();
+    expect(languageForFence("")).toBeNull();
+    expect(languageForFence(undefined)).toBeNull();
   });
 });
 
@@ -120,6 +148,15 @@ describe("HighlightClient", () => {
     };
     return w;
   }
+
+  it("highlights a given language id, and skips a null one", async () => {
+    const w = fakeWorker();
+    const client = new HighlightClient(() => w);
+    expect(await client.highlightLang("md:README.md", null, "plain")).toBeNull();
+    expect(w.sent).toEqual([]);
+    expect(await client.highlightLang("md:README.md", "typescript", "const x = 1;")).toEqual([[["const x = 1;", "#000", "#fff"]]]);
+    expect(w.sent.map((m) => m.lang)).toEqual(["typescript"]);
+  });
 
   it("caches by version, path and content", async () => {
     const w = fakeWorker();

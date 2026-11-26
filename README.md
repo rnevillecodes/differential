@@ -86,6 +86,15 @@ Files open in tabs above the diff, so several can be open at once. A single clic
 
 Close a tab with its ×, a middle-click, or `Ctrl+W`. With a tab focused, `←` / `→` and `Home` / `End` move between tabs and `Delete` closes one. Tabs for files that no longer exist are closed when the change is picked up.
 
+### Markdown files
+
+An unchanged Markdown file (`.md` or `.markdown`) opened from the Files tree is shown rendered: headings, lists, tables, task lists, block quotes, and code blocks with syntax highlighting. **Source** in the file header switches that tab to the plain text with line numbers, and **Rendered** switches back; a Markdown file opened in a new tab always starts rendered. A changed Markdown file shows its diff like any other file, and is shown rendered again once it is unchanged (for example after you commit it).
+
+- A link to another file in the repository opens that file in a tab, and a `#heading` link scrolls to that heading. Web and `mailto:` links open in your default browser or mail client. Other links do nothing, and the window never leaves the document.
+- HTML in the Markdown is rendered with the same allowlist GitHub uses for READMEs (centred paragraphs, `<details>`, `<kbd>` and so on); scripts, styles, iframes, forms and unsafe links are removed.
+- Images stored in the repository (PNG, JPEG, GIF, WebP, AVIF, BMP, ICO or SVG, up to 10 MB) are shown, and update when the file changes. Images from the web are never downloaded; they, and images that can't be shown, appear as their alt text.
+- `Ctrl+F` searches the rendered text, so formatting characters such as `**` are not matched.
+
 ### Find
 
 Press `Ctrl+F` to find text in the file or diff open in the current tab. If you have selected text on one line, it becomes the search. Otherwise the last search is kept.

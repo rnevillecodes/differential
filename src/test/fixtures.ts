@@ -94,6 +94,7 @@ export function fakeApi(over: Partial<Api> = {}): Api {
     fileContent: vi.fn(async () => "x\n"),
     listFiles: vi.fn(async () => ["a.ts", "b.ts", "README.md"]),
     viewFile: vi.fn(async () => ({ kind: "text" as const, content: "x\n" })),
+    readImage: vi.fn(async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer),
     listRefs: vi.fn(async () => [
       { name: "feature", rev: "feature", kind: "local" as const, current: true },
       { name: "main", rev: "main", kind: "local" as const, current: false },

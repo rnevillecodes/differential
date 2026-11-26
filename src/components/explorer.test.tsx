@@ -345,17 +345,20 @@ describe("editor tabs", () => {
 describe("unchanged file view", () => {
   it("shows contents with line numbers", async () => {
     const { store } = await renderApp();
+    fireEvent.click(row("ui"));
     await act(async () => {
-      fireEvent.click(row("README.md"));
+      fireEvent.click(row("c.tsx"));
       await flush();
     });
     expect(store.getState().selectedId).toBeNull();
-    expect(screen.getByLabelText("Contents of README.md")).toHaveTextContent("unchanged");
+    expect(screen.getByLabelText("Contents of src/ui/c.tsx")).toHaveTextContent("unchanged");
     const lines = screen.getAllByTestId("file-line");
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toHaveTextContent("1first README.md");
+    expect(lines[0]).toHaveTextContent("1first src/ui/c.tsx");
     expect(lines[1]).toHaveTextContent("2second");
-    expect(row("README.md")).toHaveAttribute("aria-selected", "true");
+    expect(row("c.tsx")).toHaveAttribute("aria-selected", "true");
+    // Only Markdown files offer a rendered view.
+    expect(screen.queryByRole("button", { name: "Source" })).toBeNull();
     // In the Changes list, nothing is selected.
     fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
     for (const r of screen.getAllByTestId("file-row")) expect(r).toHaveAttribute("aria-selected", "false");
