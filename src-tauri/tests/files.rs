@@ -5,7 +5,7 @@ mod common;
 use common::TestRepo;
 use differential_lib::content::limits;
 use differential_lib::error::AppError;
-use differential_lib::files::{list_files, view_file, FileView};
+use differential_lib::files::{list_files, read_image, view_file, FileView};
 use differential_lib::git::Git;
 
 fn sorted(mut v: Vec<String>) -> Vec<String> {
@@ -135,4 +135,47 @@ fn browsing_leaves_the_repository_untouched() {
     assert_eq!(std::fs::metadata(&index).unwrap().modified().unwrap(), mtime_before);
     assert_eq!(std::fs::read(&index).unwrap(), index_bytes_before);
     assert_eq!(repo.git(&["status", "--porcelain=v2"]), status_before);
+}
+
+const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, b'I', b'H', b'D', b'R'];
+
+#[test]
+fn reads_image_bytes_exactly() {
+    let repo = TestRepo::new();
+    repo.write_bytes("docs/arch.png", PNG);
+    repo.write("logo.SVG", "<svg xmlns='http://www.w3.org/2000/svg'/>");
+    assert_eq!(read_image(repo.path(), "docs/arch.png").unwrap(), PNG);
+    assert!(read_image(repo.path(), "logo.SVG").is_ok());
+}
+
+#[test]
+fn refuses_non_images_escapes_and_missing_files() {
+    let repo = TestRepo::with_files(&[("src/main.ts", "x\n")]);
+    for path in ["src/main.ts", "../x.png", "/etc/x.png", "gone.png"] {
+        assert!(read_image(repo.path(), path).is_err(), "{path}");
+    }
+    std::fs::create_dir_all(repo.path().join("dir.png")).unwrap();
+    assert!(read_image(repo.path(), "dir.png").is_err());
+}
+
+#[test]
+fn refuses_oversized_images() {
+    let repo = TestRepo::new();
+    repo.write_bytes("big.jpg", &vec![0u8; limits::MAX_IMAGE_BYTES as usize + 1]);
+    repo.write_bytes("ok.jpg", &vec![0u8; limits::MAX_IMAGE_BYTES as usize]);
+    assert!(matches!(read_image(repo.path(), "big.jpg"), Err(AppError::Invalid(_))));
+    assert!(read_image(repo.path(), "ok.jpg").is_ok());
+}
+
+#[cfg(unix)]
+#[test]
+fn refuses_symlinks_leaving_the_repository() {
+    let outside = TestRepo::new();
+    outside.write_bytes("secret.png", PNG);
+    let repo = TestRepo::new();
+    repo.write_bytes("real.png", PNG);
+    std::os::unix::fs::symlink(outside.path().join("secret.png"), repo.path().join("link.png")).unwrap();
+    std::os::unix::fs::symlink(repo.path().join("real.png"), repo.path().join("inside.png")).unwrap();
+    assert!(read_image(repo.path(), "link.png").is_err());
+    assert_eq!(read_image(repo.path(), "inside.png").unwrap(), PNG);
 }

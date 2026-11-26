@@ -214,6 +214,49 @@ describe("tabs", () => {
     expect(store.getState().selectedId).toBeNull();
   });
 
+  it("keeps a Markdown tab's rendered/source mode per tab until the tab closes", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    const mode = (path: string) => store.getState().tabs.find((t) => t.path === path)?.markdownMode ?? "rendered";
+    store.getState().openTreePath("README.md");
+    expect(mode("README.md")).toBe("rendered");
+    store.getState().toggleMarkdownMode("README.md");
+    expect(mode("README.md")).toBe("source");
+    // Pinning keeps the mode; other tabs are unaffected.
+    store.getState().pinTab("README.md");
+    expect(mode("README.md")).toBe("source");
+    store.getState().openTreePath("docs/guide.md", true);
+    expect(mode("docs/guide.md")).toBe("rendered");
+    store.getState().activateTab("README.md");
+    expect(mode("README.md")).toBe("source");
+    store.getState().toggleMarkdownMode("README.md");
+    expect(mode("README.md")).toBe("rendered");
+    store.getState().toggleMarkdownMode("README.md");
+    // Closing and reopening starts rendered again.
+    store.getState().closeTab("README.md");
+    store.getState().openTreePath("README.md");
+    expect(mode("README.md")).toBe("rendered");
+  });
+
+  it("reads images from the open repository", async () => {
+    const api = fakeApi();
+    const store = createAppStore(api, memoryStorage());
+    await expect(store.getState().readImage("a.png")).rejects.toThrow();
+    await store.getState().openPath("C:/repo");
+    await store.getState().readImage("docs/a.png");
+    expect(api.readImage).toHaveBeenCalledWith("C:/repo", "docs/a.png");
+  });
+
+  it("a preview tab replaced by another Markdown file starts rendered", async () => {
+    const store = createAppStore(fakeApi(), memoryStorage());
+    await store.getState().openPath("C:/repo");
+    store.getState().openTreePath("README.md");
+    store.getState().toggleMarkdownMode("README.md");
+    store.getState().openTreePath("docs/guide.md");
+    expect(store.getState().tabs.map((t) => t.path)).not.toContain("README.md");
+    expect(store.getState().tabs.find((t) => t.path === "docs/guide.md")?.markdownMode).toBeUndefined();
+  });
+
   it("cycles through tabs, wrapping around", async () => {
     const store = createAppStore(fakeApi(), memoryStorage());
     await store.getState().openPath("C:/repo");

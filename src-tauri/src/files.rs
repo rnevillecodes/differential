@@ -1,4 +1,5 @@
-//! Browsing the working tree: listing every project file and reading one for display.
+//! Browsing the working tree: listing every project file, reading one for display, and
+//! reading an image's bytes for rendered Markdown.
 //!
 //! Read-only: `git ls-files` plus plain file-system reads.
 
@@ -9,7 +10,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 use crate::content::{is_binary_bytes, limits, safe_join, sniff_binary, to_text};
-use crate::error::Result;
+use crate::error::{AppError, Result};
 use crate::git::Git;
 
 /// A working-tree file prepared for display.
@@ -82,6 +83,35 @@ pub fn view_file(root: &Path, path: &str, force: bool) -> Result<FileView> {
         return Ok(FileView::Binary);
     }
     Ok(FileView::Text { content: to_text(&bytes) })
+}
+
+/// Extensions of the image formats `read_image` serves.
+pub const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "avif", "bmp", "ico", "svg"];
+
+/// The bytes of the working-tree image at repo-relative `path`, for display in rendered Markdown.
+///
+/// Refuses paths that are absolute or contain `..`, files that are not an allowed image type,
+/// files whose real location (after symbolic links) is outside the repository, anything that is
+/// not a regular file, and files over `limits::MAX_IMAGE_BYTES`.
+pub fn read_image(root: &Path, path: &str) -> Result<Vec<u8>> {
+    let full = safe_join(root, path)?;
+    let ext = full.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+    if !IMAGE_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(AppError::Invalid(format!("not a supported image: {path}")));
+    }
+    // A symbolic link inside the repository may point anywhere; only serve what really lives here.
+    let real = full.canonicalize()?;
+    if !real.starts_with(root.canonicalize()?) {
+        return Err(AppError::Invalid(format!("image is outside the repository: {path}")));
+    }
+    let meta = std::fs::metadata(&real)?;
+    if !meta.is_file() {
+        return Err(AppError::Invalid(format!("not a file: {path}")));
+    }
+    if meta.len() > limits::MAX_IMAGE_BYTES {
+        return Err(AppError::Invalid(format!("image is too large: {path}")));
+    }
+    Ok(std::fs::read(&real)?)
 }
 
 #[cfg(test)]

@@ -107,6 +107,30 @@ fn file_browsing_commands_round_trip_through_ipc() {
 }
 
 #[test]
+fn read_image_returns_raw_bytes_through_ipc() {
+    let repo = TestRepo::new();
+    repo.write_bytes("a.png", &[0x89, b'P', b'N', b'G', 0, 1, 2, 255]);
+    let (_app, w) = app(InitialArgs::default());
+    let root = repo.path().to_string_lossy().to_string();
+    let url = if cfg!(windows) { "http://tauri.localhost" } else { "tauri://localhost" };
+    let request = |path: &str| InvokeRequest {
+        cmd: "read_image".into(),
+        callback: CallbackFn(0),
+        error: CallbackFn(1),
+        url: url.parse().unwrap(),
+        body: InvokeBody::Json(json!({ "root": root, "path": path })),
+        headers: Default::default(),
+        invoke_key: INVOKE_KEY.to_string(),
+    };
+    match get_ipc_response(&w, request("a.png")).unwrap() {
+        tauri::ipc::InvokeResponseBody::Raw(bytes) => assert_eq!(bytes, vec![0x89, b'P', b'N', b'G', 0, 1, 2, 255]),
+        other => panic!("expected raw bytes, got {other:?}"),
+    }
+    let err = get_ipc_response(&w, request("src.ts")).unwrap_err();
+    assert_eq!(err["kind"], "invalid");
+}
+
+#[test]
 fn list_refs_round_trips_through_ipc() {
     let repo = TestRepo::with_files(&[("a.txt", "a\n")]);
     repo.git(&["tag", "v1.0"]);

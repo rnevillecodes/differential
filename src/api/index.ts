@@ -31,6 +31,8 @@ export interface Api {
   listFiles(root: string): Promise<string[]>;
   /** One working-tree file for display; large files are only read with `force`. */
   viewFile(root: string, path: string, force: boolean): Promise<FileView>;
+  /** A working-tree image's bytes (allowed formats, inside the repository, size-limited); rejects otherwise. */
+  readImage(root: string, path: string): Promise<ArrayBuffer>;
   /** Local branches, remote-tracking branches and tags, most recent first. */
   listRefs(root: string): Promise<RefInfo[]>;
   /** One page of the commit history (all branches, remote branches, tags and HEAD), topological order. */
@@ -78,6 +80,7 @@ export const tauriApi: Api = {
   fileContent: (root, baseSha, path, side) => invoke("file_content", { root, baseSha, path, side }),
   listFiles: (root) => invoke("list_files", { root }),
   viewFile: (root, path, force) => invoke("view_file", { root, path, force }),
+  readImage: (root, path) => invoke<ArrayBuffer>("read_image", { root, path }),
   listRefs: (root) => invoke("list_refs", { root }),
   listCommits: (root, offset, limit) => invoke("list_commits", { root, offset, limit }),
   setZoom: (scale) => getCurrentWebview().setZoom(scale),

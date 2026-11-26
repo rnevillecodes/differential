@@ -64,7 +64,7 @@ The file header of a Markdown file SHALL show a toggle button that switches the 
 - **THEN** no rendered/source toggle is shown
 
 ### Requirement: Links
-Clicking a link in the rendered view SHALL NOT navigate the application window. A link starting with `#` SHALL scroll the rendered view to the heading with that anchor. A relative link to a path inside the repository SHALL open that file the same way as selecting it in the project tree (ignoring any `#fragment`), resolved against the Markdown file's folder; if no such file exists the tab SHALL show the usual file-not-found message. A relative link that resolves outside the repository root SHALL open nothing. Links with the `http`, `https` or `mailto` scheme SHALL open in the operating system's default handler. Links with any other scheme SHALL do nothing. Every link SHALL show its target as a tooltip.
+Clicking a link in the rendered view SHALL NOT navigate the application window. A link starting with `#` SHALL scroll the rendered view to the heading with that anchor. A relative link to a path inside the repository SHALL open that file the same way as selecting it in the project tree (ignoring any `#fragment`), resolved against the Markdown file's folder; if no such file exists the tab SHALL show the usual file-not-found message. A relative link that resolves outside the repository root SHALL open nothing. Links with the `http`, `https` or `mailto` scheme SHALL open in the operating system's default handler. Links with any other scheme SHALL do nothing. Every link SHALL show its target as a tooltip, except one whose unsafe URL the sanitizer removed (see the raw HTML requirement), which has no target.
 
 #### Scenario: Link to another repository file
 - **WHEN** `docs/guide.md` contains `[setup](../SETUP.md)` and the user clicks it
@@ -94,16 +94,43 @@ Clicking a link in the rendered view SHALL NOT navigate the application window. 
 - **WHEN** the user clicks a relative link that resolves outside the repository root
 - **THEN** no file is opened
 
-### Requirement: Raw HTML and images are not rendered
-HTML written in the Markdown source SHALL NOT be interpreted; it SHALL appear as literal text. Images SHALL NOT be fetched or displayed, whether local or remote; each image SHALL be shown as a placeholder containing its alt text (or the word "image" when it has none) and its source as a tooltip.
+### Requirement: Raw HTML is sanitized
+HTML written in the Markdown source SHALL be rendered after sanitizing it with the same allowlist GitHub uses for READMEs: allowed elements and attributes (such as `<p align>`, `<div>`, `<details>`/`<summary>`, `<kbd>`, `<sup>`, `<br>`) SHALL render, and everything else SHALL be removed, including `<script>`, `<style>`, `<iframe>`, forms, event-handler attributes, inline styles and unsafe URL schemes. No script in the document SHALL ever run. Links and images written as HTML SHALL behave exactly like Markdown links and images (see "Local images").
 
-#### Scenario: Embedded HTML
-- **WHEN** a file contains `<script>alert(1)</script>` or `<img src=x onerror=alert(1)>`
-- **THEN** no script runs and the markup appears as text
+#### Scenario: Allowed HTML renders
+- **WHEN** a file contains `<p align="center"><kbd>Ctrl</kbd></p>` and `<details><summary>More</summary>Hidden text</details>`
+- **THEN** a centred paragraph with a keyboard-key element and a collapsible "More" section are shown, with no markup visible as text
 
-#### Scenario: Image placeholder
-- **WHEN** a file contains `![Architecture diagram](docs/arch.png)`
-- **THEN** a placeholder reading "Architecture diagram" is shown and no request for `docs/arch.png` is made
+#### Scenario: Dangerous HTML is removed
+- **WHEN** a file contains `<script>alert(1)</script>`, `<img src=x onerror=alert(1)>`, `<iframe src="https://example.com">` and `<a href="javascript:alert(1)">x</a>`
+- **THEN** no script runs, no script, iframe or event handler is present in the page, the `x` image is shown as a placeholder, and clicking `x` does nothing
+
+### Requirement: Local images
+An image (Markdown `![alt](src)` or HTML `<img>`) whose source is a relative path SHALL be loaded from the working tree and displayed, resolved the same way as relative links (against the document's folder, or the repository root for a leading `/`). Only files with the extensions `png`, `jpg`, `jpeg`, `gif`, `webp`, `avif`, `bmp`, `ico` and `svg` (ignoring case) and no larger than 10 MB SHALL be loaded, and only when the file, after following symbolic links, is inside the repository. Images SHALL be scaled down to fit the document's width and SHALL keep the `width` and `height` given in HTML. An SVG image SHALL be displayed as an image only, never as a document that could run scripts. Remote images (`http`, `https`), `data:` URIs and other schemes SHALL NOT be fetched. An image that is not loaded — remote, missing, too large, unsupported, outside the repository, or still loading — SHALL be shown as a placeholder containing its alt text (or the word "image" when it has none) with its source as a tooltip. Loaded images SHALL be read again when the application picks up repository changes or the user refreshes.
+
+#### Scenario: Relative image is displayed
+- **WHEN** `docs/guide.md` contains `![Architecture diagram](img/arch.png)` and `docs/img/arch.png` exists
+- **THEN** the image is displayed with the alt text "Architecture diagram"
+
+#### Scenario: HTML image in a README header
+- **WHEN** a file starts with `<p align="center"><img src="logo.svg" alt="Project logo" width="128"></p>` and `logo.svg` exists
+- **THEN** the logo is displayed centred at 128 pixels wide
+
+#### Scenario: Remote image is not fetched
+- **WHEN** a file contains `![Badge](https://img.shields.io/badge/x-y-green)`
+- **THEN** a placeholder reading "Badge" is shown and no network request is made
+
+#### Scenario: Missing or unsupported image
+- **WHEN** a file contains `![Gone](gone.png)` where `gone.png` does not exist, and `![Doc](notes.pdf)`
+- **THEN** placeholders reading "Gone" and "Doc" are shown
+
+#### Scenario: Image outside the repository
+- **WHEN** a file contains `![x](../../outside.png)`, or `![y](link.png)` where `link.png` is a symbolic link to a file outside the repository
+- **THEN** placeholders are shown and nothing outside the repository is read
+
+#### Scenario: Image updated on disk
+- **WHEN** a displayed image file is replaced on disk and the application picks up the change
+- **THEN** the new image is displayed
 
 ### Requirement: Find in the rendered view
 The find bar SHALL search the rendered view's visible text (not the Markdown markup) while it is shown, with the same matching rules, match count, highlighting, and next/previous navigation as in other views. Moving to a match SHALL scroll it into view. Switching between rendered and source SHALL re-run the current query against the newly shown view.
@@ -117,11 +144,19 @@ The find bar SHALL search the rendered view's visible text (not the Markdown mar
 - **THEN** the count shows 3 matches, all are highlighted, and pressing Enter scrolls to each in turn
 
 ### Requirement: Rendered view follows file changes
-When the shown Markdown file changes on disk, the rendered view SHALL update in place without leaving the rendered mode and SHALL keep its scroll position as far as the new content allows.
+Only unchanged files are rendered. When an open Markdown file's contents change on disk while it stays unchanged against the base (for example after switching branches, pulling, or resetting, which move the base with it), the rendered view SHALL update in place without leaving the rendered mode and SHALL keep its scroll position as far as the new content allows. When the file becomes changed against the base, its tab SHALL show its diff like any other changed file; when it becomes unchanged again, the tab SHALL show it rendered again unless that tab was switched to source.
 
-#### Scenario: Agent edits the open README
-- **WHEN** `README.md` is open rendered, scrolled halfway, and the file is changed on disk
+#### Scenario: Branch switch updates the open README
+- **WHEN** `README.md` is open rendered, scrolled halfway, and the user checks out a branch where `README.md` has different contents
 - **THEN** the new content is shown rendered and the view stays scrolled near the same place
+
+#### Scenario: Editing the open README shows its diff
+- **WHEN** `README.md` is open rendered and the file is edited on disk
+- **THEN** the tab shows the file's diff, not a rendered view
+
+#### Scenario: Committing returns to the rendered view
+- **WHEN** an edited `README.md` is shown as a diff and the edit is committed with the base at `HEAD`
+- **THEN** the tab shows `README.md` rendered again
 
 ### Requirement: Rendered view in light and dark themes
 The rendered view SHALL follow the application's light or dark theme, with text, links, code blocks, tables and quotes legible in both, and SHALL scale with the UI zoom.

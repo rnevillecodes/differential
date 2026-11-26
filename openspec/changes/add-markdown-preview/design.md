@@ -7,7 +7,7 @@ Unchanged files opened from the tree render in `UnchangedFile` (`src/components/
 ## Goals / Non-Goals
 
 **Goals:**
-- Render Markdown safely (no raw HTML, no network) with React elements, not `innerHTML`.
+- Render Markdown safely (sanitized HTML only, no network) with React elements, not `innerHTML`.
 - Keep the source view exactly the existing `FileView`.
 - Reuse the existing highlighter worker and find slice rather than adding parallel machinery.
 
@@ -18,9 +18,14 @@ Unchanged files opened from the tree render in `UnchangedFile` (`src/components/
 ## Decisions
 
 ### 1. `react-markdown` + `remark-gfm`
-Produces a React tree from an mdast; raw HTML is ignored/escaped unless `rehype-raw` is added (we won't), and URL sanitizing is built in. `components` overrides give a clean hook for links, images, code blocks and checkboxes.
+Produces a React tree from an mdast; URL sanitizing is built in. `components` overrides give a clean hook for links, images, code blocks and checkboxes.
 - *Alternative — `markdown-it` / `marked` + `dangerouslySetInnerHTML`:* smaller, but needs a sanitizer to be trusted and makes per-element behavior (link interception, highlighting, find) DOM-patching work.
 - *Alternative — Shiki's markdown grammar only:* that's the source view we already have.
+
+### 1b. Raw HTML: `rehype-raw` + `rehype-sanitize` (GitHub schema)
+READMEs commonly use HTML (`<p align="center">`, `<details>`, `<kbd>`). `rehype-raw` parses it into the hast tree, then `rehype-sanitize` with its default schema — GitHub's allowlist — removes every element, attribute and URL scheme not on it. The result is still a React tree (no `innerHTML`), so HTML `<a>` and `<img>` go through the same `a`/`img` components as Markdown ones. Plugin order: `rehypeRaw` → `rehypeSanitize` → `rehypeHeadingAnchors` (anchors last, so the sanitizer can't strip `data-anchor`). The sanitizer prefixes `id`s with `user-content-` (anti-clobbering, as GitHub does), so anchor lookup also matches `user-content-<id>`; that also fixes GFM footnote links.
+- *Alternative — show HTML as text (the first version):* safe but makes typical README headers unreadable.
+- *Alternative — DOMPurify on an HTML string:* needs `innerHTML` and loses per-element React handling.
 
 ### 2. Per-tab view mode on the `Tab`
 Add `markdownMode?: "rendered" | "source"` (absent = rendered) to `Tab`, plus a `toggleMarkdownMode(path)` action. Living on the tab means it survives tab switches, is dropped when the tab closes, and a preview tab replaced by another file starts fresh — matching the spec without extra bookkeeping. Not persisted (spec says a new tab always starts rendered). Always on; no setting.
@@ -41,8 +46,15 @@ Override `a` to render an `<a href title>` whose `onClick` always `preventDefaul
 The opener capability in `src-tauri/capabilities/default.json` is scoped to `http://*`, `https://*` and `mailto:*` only, so even a bug in the UI can't open arbitrary paths or programs. A global guard in `MarkdownView` (`onClickCapture` on the root) also stops any stray anchor navigation.
 - *Alternative — no external links:* users expect README links to work; the scoped plugin is the standard, small way.
 
-### 6. Images as placeholders
-Override `img` to render a `<span class="md-image">` with the alt text (or "image") and `title` = src. No `<img>` element is ever created, so nothing is fetched regardless of CSP.
+### 6. Local images: a `read_image` command and `blob:` URLs
+Images are loaded only from the working tree, never from the network, so the webview never sees an `http(s)`, `file:` or asset URL.
+- **Backend:** `read_image(root, path)` returns the file's bytes as a raw IPC response (`tauri::ipc::Response`, no JSON/base64 overhead). It checks, in order: `safe_join` (no absolute or `..`), extension allowlist, `canonicalize` of the file starts with `canonicalize(root)` (stops symlinks out of the repo — `view_file` doesn't need this because it never shows binary content, but images are binary by definition), regular file, size ≤ `limits::MAX_IMAGE_BYTES` (10 MiB, separate from the 2 MiB text limit since screenshots are often bigger). Any failure is an `Invalid`/`Io` error; the UI only needs "not loaded".
+- **Frontend:** the `img` component resolves `src` with `linkTarget` (same rules as links); anything but a `file` target with an allowed extension stays a placeholder. Otherwise it calls `api.readImage` through a store action (`readImage(path)`, which supplies the repo root), wraps the bytes in a `Blob` with a MIME type from the extension (needed for SVG), and renders `<img src={blob:…}>`, revoking the URL on unmount or reload. A placeholder shows while loading and on failure.
+- **Reload:** the load effect depends on a store counter, `changesSeq`, bumped on every change-set load (watcher pickup or refresh). The `changes` object itself can't be used: it is kept when the new change set is identical, which happens when an already-untracked image is replaced again. A small in-memory cache is not worth it: images are read once per document render.
+- **SVG:** shown via `<img>`, where browsers never run its scripts or load its external resources.
+- **Sizing:** `max-width: 100%; height: auto`, keeping sanitized `width`/`height` attributes.
+- *Alternative — Tauri asset protocol (`convertFileSrc`):* needs a filesystem scope covering every repository the user might open (effectively the whole disk) and puts file URLs in the webview; the command keeps every check in one place.
+- *Alternative — base64 data URIs in JSON:* 33% bigger and slower than a raw response.
 
 ### 7. Find via DOM text + CSS Custom Highlight API
 The rendered view is ordinary DOM, so it can't use `TokenSpans` ranges. After render, `MarkdownView` walks its text nodes (skipping nothing visible — task checkboxes have no text) and builds search units, one per text node with key `md:<index>`. `useFind` does the matching as today. Highlights are painted with `CSS.highlights` (`Highlight` of DOM `Range`s for all matches, a second one for the current match), styled with `::highlight(find-match)` / `::highlight(find-current)` using the existing find color variables. Reveal scrolls the current range's bounding rect into view. Units are rebuilt when content changes.
@@ -50,7 +62,7 @@ The rendered view is ordinary DOM, so it can't use `TokenSpans` ranges. After re
 - *Risk:* the Highlight API must exist in all three webviews (WebView2/Chromium yes; WebKitGTK and macOS WKWebView from Safari 17.2-era WebKit). If `CSS.highlights` is missing, find still counts and scrolls to matches but without paint — acceptable degradation, documented in a code comment.
 
 ### 8. Live updates and scroll
-`ViewLoad` content updates in place (existing watcher behavior). `MarkdownView` is keyed by path only, so a content change re-renders without remounting the scroll container; the browser keeps `scrollTop`, clamped by the new height.
+`ViewLoad` content updates in place (existing watcher behavior). `MarkdownView` is keyed by path only, so a content change re-renders without remounting the scroll container; the browser keeps `scrollTop`, clamped by the new height. This applies only while the file stays unchanged against the base (branch switch, pull, reset). An edit makes it a changed file, and `TabPanel` already switches the tab to the diff and back when it becomes unchanged again; the tab's `markdownMode` lives on the `Tab`, so it survives that round trip. Changed Markdown files are deliberately never rendered.
 
 ### 9. Header toggle
 `UnchangedFile` renders a small button in `.diff-header` (right-aligned, like other header controls) when `isMarkdown(path)` and the load is `ready`: label "Source" while rendered, "Rendered" while showing source, with `aria-pressed` on source. No keyboard shortcut — not requested.
@@ -63,6 +75,7 @@ A `.markdown-body` block in `styles.css` using existing theme variables (`--fg`,
 - [New dependencies grow the bundle (react-markdown pulls in unified/remark/mdast)] → Lazy-load `MarkdownView` with `React.lazy` so the cost is paid only when a Markdown file is first opened.
 - [Very long Markdown file loaded via "load anyway" renders slowly without virtualization] → Acceptable; it was an explicit opt-in. Highlighting reuses the existing `MAX_HIGHLIGHT_LINES` cutoff per block.
 - [Links to ignored files open them even though the tree hides them] → Harmless and read-only; `viewFile` already rejects paths outside the root.
+- [A document with many large images reads them all at once] → Each is capped at 10 MiB and read on a worker thread (`blocking`), so the UI stays responsive; acceptable for READMEs.
 - [Highlight API missing on some webview] → Degrades to count + scroll without paint (see decision 7).
 - [GitHub slug rules differ subtly for odd characters] → Good enough for typical headings; mismatched anchors just don't scroll.
 

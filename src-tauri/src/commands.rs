@@ -118,6 +118,13 @@ pub async fn list_commits(root: String, offset: usize, limit: usize) -> Result<C
     blocking(move || git::list_commits(&Git::default(), Path::new(&root), offset, limit)).await
 }
 
+/// A working-tree image's bytes, as a raw (non-JSON) response.
+#[tauri::command]
+pub async fn read_image(root: String, path: String) -> Result<tauri::ipc::Response> {
+    let bytes = blocking(move || files::read_image(Path::new(&root), &path)).await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 pub async fn view_file(root: String, path: String, force: bool) -> Result<FileView> {
     blocking(move || files::view_file(Path::new(&root), &path, force)).await

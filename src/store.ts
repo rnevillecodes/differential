@@ -46,7 +46,11 @@ export interface Tab {
   path: string;
   /** A preview tab is replaced by the next file opened; pinning it keeps it open. */
   preview: boolean;
+  /** For an unchanged Markdown file: shown rendered (the default, when absent) or as source. */
+  markdownMode?: MarkdownMode;
 }
+
+export type MarkdownMode = "rendered" | "source";
 
 /** Whether the open repository is being watched for changes (null without a repository). */
 export type WatchStatus = { kind: "active" } | { kind: "unavailable"; message: string };
@@ -222,6 +226,8 @@ export interface AppState {
   findNav: { seq: number; dir: 1 | -1 };
   /** Changes whenever the find field should take focus and select its text. */
   findFocusSeq: number;
+  /** Counts every load of the change set (refresh or a picked-up file change), even when nothing in it differs. */
+  changesSeq: number;
   /** The active view's current match (1-based) and total, or null while it has not reported. */
   findStatus: FindStatus | null;
 
@@ -260,12 +266,16 @@ export interface AppState {
   activateTab(path: string): void;
   /** Close a tab; closing the active one activates its neighbour. */
   closeTab(path: string): void;
+  /** Switch an unchanged Markdown file's tab between its rendered view and its source. */
+  toggleMarkdownMode(path: string): void;
   /** Turn a preview tab into a regular one. */
   pinTab(path: string): void;
   /** Activate the tab `delta` places from the active one, wrapping around. */
   cycleTab(delta: number): void;
   /** Load an unchanged file even though it is large. */
   loadViewAnyway(path: string): void;
+  /** The bytes of an image in the open repository's working tree (rejects when there is none or it can't be read). */
+  readImage(path: string): Promise<ArrayBuffer>;
 
   setRepoPickerOpen(open: boolean): void;
   /** Forget a repository in the recent list. */
@@ -526,6 +536,7 @@ export function createAppStore(
         const keptView = activePath !== null && !activeChange ? prev.views[activePath] : undefined;
         set({
           changes,
+          changesSeq: prev.changesSeq + 1,
           base: changes.baseRef,
           files: carried && activeChange ? { [activeChange.id]: carried } : {},
           baseError: null,
@@ -721,7 +732,7 @@ export function createAppStore(
       const i = tabs.findIndex((t) => t.path === path);
       let next = tabs;
       if (i >= 0) {
-        if (pin && tabs[i].preview) next = tabs.map((t, j) => (j === i ? { path, preview: false } : t));
+        if (pin && tabs[i].preview) next = tabs.map((t, j) => (j === i ? { ...t, preview: false } : t));
       } else {
         const tab = { path, preview: !pin };
         const p = tabs.findIndex((t) => t.preview);
@@ -916,6 +927,7 @@ export function createAppStore(
       findMatchCase: false,
       findNav: { seq: 0, dir: 1 },
       findFocusSeq: 0,
+      changesSeq: 0,
       findStatus: null,
 
       async init() {
@@ -1099,10 +1111,20 @@ export function createAppStore(
         removeTabs((t) => t.path === path);
       },
 
+      toggleMarkdownMode(path) {
+        const { tabs } = get();
+        if (!tabs.some((t) => t.path === path)) return;
+        set({
+          tabs: tabs.map((t) =>
+            t.path === path ? { ...t, markdownMode: t.markdownMode === "source" ? "rendered" : "source" } : t,
+          ),
+        });
+      },
+
       pinTab(path) {
         const { tabs } = get();
         if (tabs.some((t) => t.path === path && t.preview))
-          set({ tabs: tabs.map((t) => (t.path === path ? { path, preview: false } : t)) });
+          set({ tabs: tabs.map((t) => (t.path === path ? { ...t, preview: false } : t)) });
       },
 
       cycleTab(delta) {
@@ -1114,6 +1136,11 @@ export function createAppStore(
 
       loadViewAnyway(path) {
         if (get().tabs.some((t) => t.path === path)) loadView(path, true);
+      },
+
+      readImage(path) {
+        const repo = get().repo;
+        return repo ? api.readImage(repo.root, path) : Promise.reject(new Error("no repository open"));
       },
 
       setRepoPickerOpen(open) {

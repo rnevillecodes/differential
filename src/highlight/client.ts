@@ -27,9 +27,16 @@ export class HighlightClient {
    * e.g. the base SHA or "worktree".
    */
   highlight(version: string, path: string, content: string): Promise<LineTokens[] | null> {
-    const lang = languageFor(path);
+    return this.highlightLang(version, languageFor(path), content, path);
+  }
+
+  /**
+   * Like `highlight`, for a known Shiki language id (e.g. a Markdown code fence's), or
+   * null for plain text. `label` distinguishes contents cached under the same version.
+   */
+  highlightLang(version: string, lang: string | null, content: string, label = ""): Promise<LineTokens[] | null> {
     if (!lang || countLines(content) > MAX_HIGHLIGHT_LINES) return Promise.resolve(null);
-    const key = `${version}|${path}|${hashString(content)}`;
+    const key = `${version}|${label}|${lang}|${hashString(content)}`;
     let result = this.cache.get(key);
     if (!result) {
       result = this.request(content, lang);

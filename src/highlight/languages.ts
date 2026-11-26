@@ -44,3 +44,29 @@ export function languageFor(path: string): string | null {
   if (dot <= 0 && !name.startsWith(".")) return null;
   return BY_EXTENSION[name.slice(dot + 1)] ?? null;
 }
+
+/** Whether `path` is a Markdown file shown rendered: `.md` or `.markdown`, ignoring case (not `.mdx`). */
+export function isMarkdown(path: string): boolean {
+  return /\.(md|markdown)$/i.test(path);
+}
+
+/** Every language id the extension and file-name maps produce. */
+const KNOWN_IDS = new Set([...Object.values(BY_EXTENSION), ...Object.values(BY_FILENAME)]);
+
+/** Common fence names that are neither a language id nor an extension above. */
+const FENCE_ALIASES: Record<string, string> = {
+  shell: "shellscript", console: "shellscript", "c++": "cpp", "c#": "csharp", "f#": "fsharp",
+  golang: "go", dockerfile: "docker", makefile: "make", jsonl: "json", text: "", txt: "", plaintext: "",
+};
+
+/**
+ * The Shiki language for a fenced code block's info string (`ts`, `typescript`, `py {title=x}`),
+ * or null for an empty or unknown one.
+ */
+export function languageForFence(info: string | null | undefined): string | null {
+  const word = (info ?? "").trim().split(/[\s{]/)[0].toLowerCase();
+  if (!word) return null;
+  if (word in FENCE_ALIASES) return FENCE_ALIASES[word] || null;
+  if (KNOWN_IDS.has(word)) return word;
+  return BY_EXTENSION[word] ?? null;
+}
