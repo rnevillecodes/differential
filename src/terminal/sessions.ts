@@ -51,6 +51,14 @@ export function isToggleKey(e: KeyboardEvent): boolean {
   return e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && e.code === "Backquote";
 }
 
+/** What Shift+Enter sends to the shell: ESC CR, the newline-in-prompt sequence. */
+export const SHIFT_ENTER = "\x1b\r";
+
+/** Whether a key event is Shift+Enter with no other modifiers. */
+export function isShiftEnter(e: KeyboardEvent): boolean {
+  return e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && e.key === "Enter";
+}
+
 export function createTerminalSessions(api: Api, events: TerminalSessionEvents): TerminalSessions {
   const entries = new Map<number, Entry>();
 
@@ -147,6 +155,15 @@ export function createTerminalSessions(api: Api, events: TerminalSessionEvents):
           e.preventDefault();
           copy(entry);
           term.clearSelection();
+        }
+        return false;
+      }
+      // xterm sends a bare CR for Shift+Enter, indistinguishable from Enter. Send ESC CR instead
+      // (as VS Code's terminal does) so prompts that support it insert a newline rather than submit.
+      if (isShiftEnter(e)) {
+        if (e.type === "keydown") {
+          e.preventDefault();
+          send(entry, SHIFT_ENTER);
         }
         return false;
       }
